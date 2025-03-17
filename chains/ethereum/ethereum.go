@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/gjermundgaraba/libibc/chains/network"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 )
 
 var _ network.Chain = &Ethereum{}
@@ -22,9 +23,10 @@ type Ethereum struct {
 	ethRPC        string
 	ics26Address  ethcommon.Address
 	ics20Address  ethcommon.Address
+	logger        *zap.Logger
 }
 
-func NewEthereum(ctx context.Context, chainID string, ethRPC string, ics26AddressHex string) (*Ethereum, error) {
+func NewEthereum(ctx context.Context, logger *zap.Logger, chainID string, ethRPC string, ics26AddressHex string) (*Ethereum, error) {
 	ethClient, err := ethclient.Dial(ethRPC)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to dial ethereum client")
@@ -55,6 +57,7 @@ func NewEthereum(ctx context.Context, chainID string, ethRPC string, ics26Addres
 		ethRPC:        ethRPC,
 		ics26Address:  ics26Address,
 		ics20Address:  ics20Address,
+		logger:        logger,
 	}, nil
 }
 

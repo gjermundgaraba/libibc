@@ -13,6 +13,7 @@ import (
 	"github.com/gjermundgaraba/libibc/chains/ethereum/erc20"
 	"github.com/gjermundgaraba/libibc/ibc"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 )
 
 // SendTransfer implements network.Chain.
@@ -53,6 +54,9 @@ func (e *Ethereum) SendTransfer(
 		}); err != nil {
 			return ibc.Packet{}, errors.Wrap(err, "failed to approve transfer")
 		}
+
+		e.logger.Info("Approved transfer", zap.Uint64("amount", amount.Uint64()), zap.String("denom", denom), zap.String("to", to))
+		time.Sleep(5 * time.Second)
 	}
 
 	timeout := uint64(time.Now().Add(6 * time.Hour).Unix())
@@ -80,6 +84,8 @@ func (e *Ethereum) SendTransfer(
 	if len(packets) != 1 {
 		return ibc.Packet{}, errors.Errorf("failed to get packet for transfer (expected 1, got %d)", len(packets))
 	}
+
+	e.logger.Info("Sent transfer", zap.String("tx_hash", receipt.TxHash.String()), zap.String("from", wallet.Address.Hex()), zap.String("to", to), zap.Uint64("amount", amount.Uint64()), zap.String("denom", denom))
 
 	return packets[0], nil
 }

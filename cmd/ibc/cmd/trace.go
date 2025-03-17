@@ -15,7 +15,7 @@ func traceCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 
-			network, err := cfg.ToNetwork(ctx)
+			network, err := cfg.ToNetwork(ctx, logger)
 			if err != nil {
 				return errors.Wrap(err, "failed to build network")
 			}
@@ -39,3 +39,4 @@ func traceCmd() *cobra.Command {
 
 	return cmd
 }
+

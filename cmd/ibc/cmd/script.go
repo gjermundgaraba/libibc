@@ -1,10 +1,8 @@
 package cmd
 
 import (
-	"encoding/hex"
 	"fmt"
 	"math/big"
-	"strings"
 	"time"
 
 	"github.com/briandowns/spinner"
@@ -25,40 +23,65 @@ func scriptCmd() *cobra.Command {
 
 			ctx := cmd.Context()
 
-			network, err := cfg.ToNetwork(ctx)
+			network, err := cfg.ToNetwork(ctx, logger)
 			if err != nil {
 				return errors.Wrap(err, "failed to build network")
 			}
 
 			eth := network.GetChain("11155111")
-			clientID := "plz-last-hub-devnet-47"
-			ethWalletID := "ggeth"
-			cosmosWalletID := "ggcosmos"
+			ethSideClientID := "plz-last-hub-devnet-69"
+			ethRelayerWalletID := "eth-relayer"
+			cosmos := network.GetChain("eureka-hub-dev-6")
+			cosmosSideClientID := "08-wasm-2"
+			cosmosRelayerWalletID := "cosmos-relayer"
 			amount := big.NewInt(100)
 			denom := "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14"
-			to := "cosmos14tvy7waxghv7sxv0h79tpv20hnt5977gtkwltu"
 
-			packet, err := eth.SendTransfer(ctx, clientID, ethWalletID, amount, denom, to)
-			if err != nil {
-				return errors.Wrap(err, "failed to send transfer from eth to cosmos")
-			}
-
-			cosmos := network.GetChain("eureka-hub-dev-6")
-			dstClient, ok := eth.GetClients()[clientID]
-			if !ok {
-				return errors.Errorf("client %s not found", clientID)
-			}
-			txHash := strings.TrimPrefix(packet.TxHash, "0x")
-			txHashBz, err := hex.DecodeString(txHash)
-			if err != nil {
-				return errors.Wrapf(err, "failed to decode tx hash: %s", packet.TxHash)
-			}
-			relayTxHash, err := network.Relayer.Relay(ctx, eth, cosmos, dstClient.ClientID, cosmosWalletID, [][]byte{txHashBz})
-			if err != nil {
-				return errors.Wrapf(err, "failed to relay tx: %s", packet.TxHash)
+			ethWallets := eth.GetWallets()
+			cosmosWallets := cosmos.GetWallets()
+			if len(ethWallets) != len(cosmosWallets) {
+				return errors.Errorf("wallets length mismatch: %d != %d", len(ethWallets), len(cosmosWallets))
 			}
 
-			fmt.Printf("Relay tx hash: %s\n", relayTxHash)
+			for range len(ethWallets) {
+				ethWallet := ethWallets[0]
+				cosmosWallet := cosmosWallets[0]
+
+				if err := network.TransferWithRelay(ctx, eth, cosmos, ethSideClientID, ethWallet.GetID(), ethRelayerWalletID, cosmosRelayerWalletID, amount, denom, cosmosWallet.GetAddress()); err != nil {
+					return errors.Wrap(err, "failed to transfer with relay from eth to cosmos")
+				}
+			}
+
+			for range len(ethWallets) {
+				ethWallet := ethWallets[0]
+				cosmosWallet := cosmosWallets[0]
+
+				if err := network.TransferWithRelay(ctx, cosmos, eth, cosmosSideClientID, cosmosWallet.GetID(), cosmosRelayerWalletID, ethRelayerWalletID, amount, denom, ethWallet.GetAddress()); err != nil {
+					return errors.Wrap(err, "failed to transfer with relay from cosmos to eth")
+				}
+			}
+
+			// packet, err := eth.SendTransfer(ctx, clientID, ethWalletID, amount, denom, to)
+			// if err != nil {
+			// 	return errors.Wrap(err, "failed to send transfer from eth to cosmos")
+			// }
+			//
+			// dstClient, ok := eth.GetClients()[clientID]
+			// if !ok {
+			// 	return errors.Errorf("client %s not found", clientID)
+			// }
+			// sendRelayTxHash, err := network.Relayer.Relay(ctx, eth, cosmos, dstClient.ClientID, relayerWalletID, []string{packet.TxHash})
+			// if err != nil {
+			// 	return errors.Wrapf(err, "failed to relay transfer tx: %s", packet.TxHash)
+			// }
+			//
+			// logger.Info("Relay send transfer tx hash", zap.String("txHash", sendRelayTxHash))
+			//
+			// ackRelayTxHash, err := network.Relayer.Relay(ctx, eth, cosmos, dstClient.ClientID, relayerWalletID, []string{sendRelayTxHash})
+			// if err != nil {
+			// 	return errors.Wrapf(err, "failed to relay ack tx: %s", packet.TxHash)
+			// }
+			// fmt.Printf("Relay ack tx hash: %s\n", ackRelayTxHash)
 
 			return nil
 		},
@@ -66,3 +89,4 @@ func scriptCmd() *cobra.Command {
 
 	return cmd
 }
+

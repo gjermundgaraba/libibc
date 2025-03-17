@@ -4,12 +4,15 @@ import (
 	"context"
 	"maps"
 	"math/big"
+	"time"
 
 	"github.com/gjermundgaraba/libibc/ibc"
+	"go.uber.org/zap"
 )
 
 type Network struct {
 	Relayer     Relayer
+	logger      *zap.Logger
 	chains      map[string]Chain
 	connections map[string]ClientCounterparty
 }
@@ -24,6 +27,7 @@ type Chain interface {
 
 	AddWallet(walletID string, privateKeyHex string) error
 	GetWallet(walletID string) Wallet
+	GetWallets() []Wallet
 
 	AddClient(clientID string, counterparty ClientCounterparty)
 	GetClients() map[string]ClientCounterparty
@@ -35,16 +39,18 @@ type Chain interface {
 }
 
 type Wallet interface {
+	GetID() string
 	GetAddress() string
 }
 
 type Relayer interface {
-	Relay(ctx context.Context, srcChain Chain, dstChain Chain, dstClient string, walletID string, txIds [][]byte) (string, error)
+	Relay(ctx context.Context, srcChain Chain, dstChain Chain, dstClient string, walletID string, txIds []string) (string, error)
 }
 
-func BuildNetwork(chains []Chain, relayer Relayer) (*Network, error) {
+func BuildNetwork(logger *zap.Logger, chains []Chain, relayer Relayer) (*Network, error) {
 	network := &Network{
 		Relayer:     relayer,
+		logger:      logger,
 		chains:      make(map[string]Chain),
 		connections: make(map[string]ClientCounterparty),
 	}
@@ -60,6 +66,42 @@ func BuildNetwork(chains []Chain, relayer Relayer) (*Network, error) {
 
 func (n *Network) GetChain(chainID string) Chain {
 	return n.chains[chainID]
+}
+
+func (n *Network) TransferWithRelay(
+	ctx context.Context,
+	srcChain Chain,
+	dstChain Chain,
+	srcClient string,
+	senderWalletID string,
+	srcRelayerWalletID string,
+	dstRelayerWalletID string,
+	amount *big.Int,
+	denom string,
+	to string,
+) error {
+	packet, err := srcChain.SendTransfer(ctx, srcClient, senderWalletID, amount, denom, to)
+	if err != nil {
+		return err
+	}
+
+	sendRelayTxHash, err := n.Relayer.Relay(ctx, srcChain, dstChain, packet.DestinationClient, dstRelayerWalletID, []string{packet.TxHash})
+	if err != nil {
+		return err
+	}
+
+	n.logger.Info("Relay send transfer tx hash", zap.String("txHash", sendRelayTxHash))
+
+	time.Sleep(30 * time.Second)
+
+	ackRelayTxHash, err := n.Relayer.Relay(ctx, dstChain, srcChain, srcClient, srcRelayerWalletID, []string{sendRelayTxHash})
+	if err != nil {
+		return err
+	}
+
+	n.logger.Info("Relay ack tx hash", zap.String("txHash", ackRelayTxHash))
+
+	return nil
 }
 
 // func (n *Network) TracePacket(packet ibc.Packet) error {

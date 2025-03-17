@@ -14,6 +14,7 @@ import (
 var _ network.Wallet = &Wallet{}
 
 type Wallet struct {
+	ID         string
 	Address    ethcommon.Address
 	PrivateKey *ecdsa.PrivateKey
 }
@@ -31,11 +32,26 @@ func (e *Ethereum) AddWallet(walletID string, privateKeyHex string) error {
 	}
 
 	e.Wallets[walletID] = Wallet{
+		ID:         walletID,
 		Address:    crypto.PubkeyToAddress(privKey.PublicKey),
 		PrivateKey: privKey,
 	}
 
 	return nil
+}
+
+// GetWallets implements network.Chain.
+func (e *Ethereum) GetWallets() []network.Wallet {
+	wallets := make([]network.Wallet, 0, len(e.Wallets))
+	for _, wallet := range e.Wallets {
+		wallets = append(wallets, &wallet)
+	}
+	return wallets
+}
+
+// GetID implements network.Wallet.
+func (w *Wallet) GetID() string {
+	return w.ID
 }
 
 // GetAddress implements network.Wallet.

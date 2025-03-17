@@ -9,6 +9,7 @@ import (
 	"github.com/gjermundgaraba/libibc/ibc"
 	"github.com/gjermundgaraba/libibc/utils"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 )
 
 var _ network.Chain = &Cosmos{}
@@ -20,9 +21,10 @@ type Cosmos struct {
 
 	grpcAddr string
 	codec    codec.Codec
+	logger   *zap.Logger
 }
 
-func NewCosmos(chainID string, grpc string) (*Cosmos, error) {
+func NewCosmos(logger *zap.Logger, chainID string, grpc string) (*Cosmos, error) {
 	codec := SetupCodec()
 	return &Cosmos{
 		ChainID: chainID,
@@ -31,6 +33,7 @@ func NewCosmos(chainID string, grpc string) (*Cosmos, error) {
 
 		grpcAddr: grpc,
 		codec:    codec,
+		logger:   logger,
 	}, nil
 }
 

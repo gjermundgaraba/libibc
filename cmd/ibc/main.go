@@ -13,6 +13,7 @@ type stackTracer interface {
 }
 
 func main() {
+
 	rootCmd := cmd.NewRootCmd()
 	if err := rootCmd.Execute(); err != nil {
 		os.Stderr.WriteString("Something went wrong:\n")

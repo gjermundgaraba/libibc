@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 const (
@@ -18,8 +19,11 @@ const (
 func TestGetPacketV1(t *testing.T) {
 	ctx := context.Background()
 
-	// Create a new Cosmos instancErrorfe
-	cosmos, err := NewCosmos("test-chain-id", TestCosmosGRPC)
+	// Create a test logger
+	testLogger, _ := zap.NewDevelopment()
+
+	// Create a new Cosmos instance
+	cosmos, err := NewCosmos(testLogger, "test-chain-id", TestCosmosGRPC)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,8 +43,11 @@ func TestGetPacketV1(t *testing.T) {
 func TestGetPacketV2(t *testing.T) {
 	ctx := context.Background()
 
+	// Create a test logger
+	testLogger, _ := zap.NewDevelopment()
+
 	// Create a new Cosmos instance
-	cosmos, err := NewCosmos("test-chain-id", TestCosmosGRPC)
+	cosmos, err := NewCosmos(testLogger, "test-chain-id", TestCosmosGRPC)
 	if err != nil {
 		t.Fatal(err)
 	}

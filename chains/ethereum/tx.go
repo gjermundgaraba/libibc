@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/gjermundgaraba/libibc/utils"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 )
 
 // SubmitTx implements network.Chain.
@@ -46,6 +47,8 @@ func (e *Ethereum) SubmitRelayTx(ctx context.Context, txBz []byte, walletID stri
 	if err != nil {
 		return "", errors.Wrap(err, "failed to submit tx")
 	}
+
+	e.logger.Info("Submitted relay tx", zap.String("tx_hash", receipt.TxHash.String()))
 
 	return receipt.TxHash.String(), nil
 }

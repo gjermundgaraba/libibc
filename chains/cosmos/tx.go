@@ -16,6 +16,7 @@ import (
 	"github.com/cosmos/gogoproto/proto"
 	"github.com/gjermundgaraba/libibc/utils"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 )
 
 // SubmitTx implements network.Chain.
@@ -120,6 +121,8 @@ func (c *Cosmos) SubmitRelayTx(ctx context.Context, txBz []byte, walletID string
 	if grpcRes.TxResponse.Code != 0 {
 		return "", errors.Errorf("tx failed with code %d: %+v", grpcRes.TxResponse.Code, grpcRes.TxResponse)
 	}
+
+	c.logger.Info("tx broadcasted", zap.String("tx_hash", grpcRes.TxResponse.TxHash))
 
 	return grpcRes.TxResponse.TxHash, nil
 }

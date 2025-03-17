@@ -10,6 +10,7 @@ import (
 	"github.com/gjermundgaraba/libibc/cmd/ibc/relayer"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
+	"go.uber.org/zap"
 )
 
 // Config represents the application configuration
@@ -62,7 +63,7 @@ func LoadConfig(configPath string) (*Config, error) {
 	return &config, nil
 }
 
-func (c *Config) ToNetwork(ctx context.Context) (*network.Network, error) {
+func (c *Config) ToNetwork(ctx context.Context, logger *zap.Logger) (*network.Network, error) {
 	walletConfigs := make(map[string]WalletConfig)
 	for _, walletConfig := range c.Wallets {
 		walletConfigs[walletConfig.WalletID] = walletConfig
@@ -76,12 +77,12 @@ func (c *Config) ToNetwork(ctx context.Context) (*network.Network, error) {
 		)
 		switch chainConfig.ChainType {
 		case "cosmos":
-			chain, err = cosmos.NewCosmos(chainConfig.ChainID, chainConfig.GRPCAddr)
+			chain, err = cosmos.NewCosmos(logger, chainConfig.ChainID, chainConfig.GRPCAddr)
 			if err != nil {
 				return nil, errors.Wrap(err, "failed to create Cosmos chain")
 			}
 		case "ethereum":
-			chain, err = ethereum.NewEthereum(ctx, chainConfig.ChainID, chainConfig.RPCAddr, chainConfig.ICS26Address)
+			chain, err = ethereum.NewEthereum(ctx, logger, chainConfig.ChainID, chainConfig.RPCAddr, chainConfig.ICS26Address)
 			if err != nil {
 				return nil, errors.Wrap(err, "failed to create Ethereum chain")
 			}
@@ -111,6 +112,7 @@ func (c *Config) ToNetwork(ctx context.Context) (*network.Network, error) {
 
 	}
 
-	relayer := relayer.NewRelayer(c.RelayerGRPCAddr)
-	return network.BuildNetwork(chains, relayer)
+	relayer := relayer.NewRelayer(logger, c.RelayerGRPCAddr)
+	return network.BuildNetwork(logger, chains, relayer)
 }
+
