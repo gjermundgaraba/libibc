@@ -40,6 +40,8 @@ func NewRootCmd() *cobra.Command {
 		traceCmd(),
 		scriptCmd(),
 		relayCmd(),
+		distributeCmd(),
+		generateWalletCmd(),
 	)
 
 	return rootCmd

@@ -41,22 +41,30 @@ func (c *Cosmos) SubmitRelayTx(ctx context.Context, txBz []byte, walletID string
 		msgs = append(msgs, sdkMsg)
 	}
 
-	grpcConn, err := utils.GetGRPC(c.grpcAddr)
-	if err != nil {
-		return "", errors.Wrap(err, "failed to get grpc connection")
-	}
-
 	wallet, ok := c.Wallets[walletID]
 	if !ok {
 		return "", errors.New("wallet not found")
 	}
-	cosmosAddress := wallet.GetAddress()
+
+	grpcRes, err := c.submitTx(ctx, wallet, msgs...)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to submit tx")
+	}
+
+	return grpcRes.TxResponse.TxHash, nil
+}
+
+func (c *Cosmos) submitTx(ctx context.Context, wallet Wallet, msgs ...sdk.Msg) (*txtypes.BroadcastTxResponse, error) {
+	grpcConn, err := utils.GetGRPC(c.grpcAddr)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get grpc connection")
+	}
 
 	// Get account for sequence and account number
 	accountClient := accounttypes.NewQueryClient(grpcConn)
-	accountRes, err := accountClient.AccountInfo(ctx, &accounttypes.QueryAccountInfoRequest{Address: cosmosAddress})
+	accountRes, err := accountClient.AccountInfo(ctx, &accounttypes.QueryAccountInfoRequest{Address: wallet.GetAddress()})
 	if err != nil {
-		return "", errors.Wrap(err, "failed to get account info")
+		return nil, errors.Wrap(err, "failed to get account info")
 	}
 
 	txCfg := authtx.NewTxConfig(c.codec, authtx.DefaultSignModes)
@@ -75,11 +83,11 @@ func (c *Cosmos) SubmitRelayTx(ctx context.Context, txBz []byte, walletID string
 	}
 	err = txBuilder.SetSignatures(sigV2)
 	if err != nil {
-		return "", errors.Wrap(err, "failed to set signature")
+		return nil, errors.Wrap(err, "failed to set signature")
 	}
 
 	signerData := xauthsigning.SignerData{
-		Address:       cosmosAddress,
+		Address:       wallet.GetAddress(),
 		ChainID:       c.ChainID,
 		AccountNumber: accountRes.Info.AccountNumber,
 	}
@@ -93,17 +101,17 @@ func (c *Cosmos) SubmitRelayTx(ctx context.Context, txBz []byte, walletID string
 		accountRes.Info.Sequence,
 	)
 	if err != nil {
-		return "", errors.Wrap(err, "failed to sign with priv key")
+		return nil, errors.Wrap(err, "failed to sign with priv key")
 	}
 	err = txBuilder.SetSignatures(sigV2)
 	if err != nil {
-		return "", errors.Wrap(err, "failed to set signature")
+		return nil, errors.Wrap(err, "failed to set signature")
 	}
 
 	// Generated Protobuf-encoded bytes.
 	txBytes, err := txCfg.TxEncoder()(txBuilder.GetTx())
 	if err != nil {
-		return "", errors.Wrap(err, "failed to encode tx")
+		return nil, errors.Wrap(err, "failed to encode tx")
 	}
 
 	txClient := txtypes.NewServiceClient(grpcConn)
@@ -116,13 +124,13 @@ func (c *Cosmos) SubmitRelayTx(ctx context.Context, txBz []byte, walletID string
 		},
 	)
 	if err != nil {
-		return "", errors.Wrap(err, "failed to broadcast tx")
+		return nil, errors.Wrap(err, "failed to broadcast tx")
 	}
 	if grpcRes.TxResponse.Code != 0 {
-		return "", errors.Errorf("tx failed with code %d: %+v", grpcRes.TxResponse.Code, grpcRes.TxResponse)
+		return nil, errors.Errorf("tx failed with code %d: %+v", grpcRes.TxResponse.Code, grpcRes.TxResponse)
 	}
 
 	c.logger.Info("tx broadcasted", zap.String("tx_hash", grpcRes.TxResponse.TxHash))
 
-	return grpcRes.TxResponse.TxHash, nil
+	return grpcRes, nil
 }

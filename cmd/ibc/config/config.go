@@ -3,64 +3,106 @@ package config
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/gjermundgaraba/libibc/chains/cosmos"
 	"github.com/gjermundgaraba/libibc/chains/ethereum"
 	"github.com/gjermundgaraba/libibc/chains/network"
 	"github.com/gjermundgaraba/libibc/cmd/ibc/relayer"
+	"github.com/pelletier/go-toml"
 	"github.com/pkg/errors"
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
 
 // Config represents the application configuration
 type Config struct {
-	Chains          []ChainConfig  `mapstructure:"chains"`
-	Wallets         []WalletConfig `mapstructure:"wallets"`
-	RelayerGRPCAddr string         `mapstructure:"relayer-grpc-addr"`
+	Chains          []ChainConfig  `toml:"chains"`
+	Wallets         []WalletConfig `toml:"wallets"`
+	RelayerGRPCAddr string         `toml:"relayer-grpc-addr"`
 }
 
 // ChainConfig represents the configuration for a single chain
 type ChainConfig struct {
-	ChainType string         `mapstructure:"chain-type"`
-	ChainID   string         `mapstructure:"chain-id"`
-	RPCAddr   string         `mapstructure:"rpc-addr"`
-	GRPCAddr  string         `mapstructure:"grpc-addr"`
-	Clients   []ClientConfig `mapstructure:"clients"`
-	WalletIDs []string       `mapstructure:"wallet-ids"`
+	ChainType string         `toml:"chain-type"`
+	ChainID   string         `toml:"chain-id"`
+	RPCAddr   string         `toml:"rpc-addr"`
+	GRPCAddr  string         `toml:"grpc-addr"`
+	Clients   []ClientConfig `toml:"clients"`
+	WalletIDs []string       `toml:"wallet-ids"`
 
 	// Ethereum specific fields
-	ICS26Address string `mapstructure:"ics26-address"`
+	ICS26Address string `toml:"ics26-address"`
 }
 
 // ClientConfig represents the configuration for a client
 type ClientConfig struct {
-	ClientID             string `mapstructure:"client-id"`
-	CounterpartyChainID  string `mapstructure:"counterparty-chain-id"`
-	CounterpartyClientID string `mapstructure:"counterparty-client-id"`
+	ClientID             string `toml:"client-id"`
+	CounterpartyChainID  string `toml:"counterparty-chain-id"`
+	CounterpartyClientID string `toml:"counterparty-client-id"`
 }
 
 // WalletConfig represents the configuration for a wallet
 type WalletConfig struct {
-	WalletID   string `mapstructure:"wallet-id"`
-	PrivateKey string `mapstructure:"private-key"`
+	WalletID   string `toml:"wallet-id"`
+	PrivateKey string `toml:"private-key"`
 }
 
 // LoadConfig reads and parses the config file
 func LoadConfig(configPath string) (*Config, error) {
-	v := viper.New()
-	v.SetConfigFile(configPath)
-
-	if err := v.ReadInConfig(); err != nil {
-		return nil, fmt.Errorf("failed to read config file: %w", err)
+	// Read the config file
+	file, err := os.Open(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open config file: %w", err)
 	}
+	defer file.Close()
 
 	var config Config
-	if err := v.Unmarshal(&config); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
+	if err := toml.NewDecoder(file).Decode(&config); err != nil {
+		return nil, fmt.Errorf("failed to decode config: %w", err)
 	}
 
 	return &config, nil
+}
+
+// SaveConfig writes the config to file using go-toml directly
+func (c *Config) SaveConfig(configPath string) error {
+	// Marshal directly to TOML
+	data, err := toml.Marshal(c)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	// Write to a new temporary file for atomic write
+	tempFile, err := os.CreateTemp("", "config-*.toml")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	defer os.Remove(tempFile.Name())
+
+	// Write the TOML data to the temp file
+	if _, err := tempFile.Write(data); err != nil {
+		return fmt.Errorf("failed to write to temp file: %w", err)
+	}
+
+	// Close the temp file
+	if err := tempFile.Close(); err != nil {
+		return fmt.Errorf("failed to close temp file: %w", err)
+	}
+
+	// Copy the temp file to the destination
+	if err := os.Rename(tempFile.Name(), configPath); err != nil {
+		// If rename fails (e.g., across filesystems), try copy
+		input, err := os.ReadFile(tempFile.Name())
+		if err != nil {
+			return fmt.Errorf("failed to read temp file: %w", err)
+		}
+
+		if err := os.WriteFile(configPath, input, 0644); err != nil {
+			return fmt.Errorf("failed to write config file: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func (c *Config) ToNetwork(ctx context.Context, logger *zap.Logger) (*network.Network, error) {
@@ -115,4 +157,3 @@ func (c *Config) ToNetwork(ctx context.Context, logger *zap.Logger) (*network.Ne
 	relayer := relayer.NewRelayer(logger, c.RelayerGRPCAddr)
 	return network.BuildNetwork(logger, chains, relayer)
 }
-

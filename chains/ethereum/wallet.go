@@ -40,6 +40,36 @@ func (e *Ethereum) AddWallet(walletID string, privateKeyHex string) error {
 	return nil
 }
 
+// GetWallet implements network.Chain.
+func (e *Ethereum) GetWallet(walletID string) (network.Wallet, error) {
+	wallet, ok := e.Wallets[walletID]
+	if !ok {
+		return nil, errors.Errorf("wallet not found: %s", walletID)
+	}
+	return &wallet, nil
+}
+
+// GenerateWallet implements network.Chain.
+func (e *Ethereum) GenerateWallet(walletID string) (network.Wallet, error) {
+	// Generate a new private key
+	privKey, err := crypto.GenerateKey()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to generate Ethereum private key")
+	}
+
+	// Create wallet
+	wallet := Wallet{
+		ID:         walletID,
+		Address:    crypto.PubkeyToAddress(privKey.PublicKey),
+		PrivateKey: privKey,
+	}
+
+	// Store wallet
+	e.Wallets[walletID] = wallet
+
+	return &wallet, nil
+}
+
 // GetWallets implements network.Chain.
 func (e *Ethereum) GetWallets() []network.Wallet {
 	wallets := make([]network.Wallet, 0, len(e.Wallets))
@@ -57,4 +87,9 @@ func (w *Wallet) GetID() string {
 // GetAddress implements network.Wallet.
 func (w *Wallet) GetAddress() string {
 	return w.Address.String()
+}
+
+// GetPrivateKeyHex implements network.Wallet.
+func (w *Wallet) GetPrivateKeyHex() string {
+	return hex.EncodeToString(crypto.FromECDSA(w.PrivateKey))
 }

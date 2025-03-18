@@ -26,8 +26,9 @@ type Chain interface {
 	GetChainID() string
 
 	AddWallet(walletID string, privateKeyHex string) error
-	GetWallet(walletID string) Wallet
+	GetWallet(walletID string) (Wallet, error)
 	GetWallets() []Wallet
+	GenerateWallet(walletID string) (Wallet, error)
 
 	AddClient(clientID string, counterparty ClientCounterparty)
 	GetClients() map[string]ClientCounterparty
@@ -36,11 +37,13 @@ type Chain interface {
 
 	SubmitRelayTx(ctx context.Context, txBz []byte, walletID string) (string, error)
 	SendTransfer(ctx context.Context, clientID string, walletID string, amount *big.Int, denom string, to string) (ibc.Packet, error)
+	NativeSend(ctx context.Context, walletID string, amount *big.Int, toAddress string) (string, error)
 }
 
 type Wallet interface {
 	GetID() string
 	GetAddress() string
+	GetPrivateKeyHex() string
 }
 
 type Relayer interface {

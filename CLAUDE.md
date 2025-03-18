@@ -13,7 +13,7 @@
 - **Imports**: Group standard library, external dependencies, and internal imports
 - **Naming**: Use CamelCase for exported symbols, camelCase for non-exported
 - **Testing**: Use `github.com/stretchr/testify` for assertions - prefer `require` for test failures
-- **Comments**: Document all exported types with very brief comments. Avoid commenting too much in code, prefer readable code.
+- **Comments**: Don't add a bunch of useless comments. Clear code over comments. Always.
 - **File Organization**: Place interfaces at package level, implementation below
 - **Coding Style**: Only implement what is required, never add unnecessary functionality or checks that are not required.
 

@@ -42,11 +42,6 @@ func (c *Cosmos) GetChainID() string {
 	return c.ChainID
 }
 
-func (c *Cosmos) GetWallet(walletID string) network.Wallet {
-	wallet := c.Wallets[walletID]
-	return &wallet
-}
-
 func (c *Cosmos) AddClient(clientID string, counterparty network.ClientCounterparty) {
 	c.Clients[clientID] = counterparty
 }

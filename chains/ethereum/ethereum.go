@@ -66,12 +66,6 @@ func (e *Ethereum) GetChainID() string {
 	return e.ChainID
 }
 
-// GetWallet implements network.Chain.
-func (e *Ethereum) GetWallet(walletID string) network.Wallet {
-	wallet := e.Wallets[walletID]
-	return &wallet
-}
-
 // AddClient implements network.Chain.
 func (e *Ethereum) AddClient(clientID string, counterparty network.ClientCounterparty) {
 	e.Clients[clientID] = counterparty
