@@ -25,6 +25,7 @@ func (e *Ethereum) SendTransfer(
 	denom string,
 	to string,
 ) (ibc.Packet, error) {
+	e.logger.Info("Sending transfer", zap.String("from", walletID), zap.String("to", to), zap.Uint64("amount", amount.Uint64()), zap.String("denom", denom))
 	ethClient, err := ethclient.Dial(e.ethRPC)
 	if err != nil {
 		return ibc.Packet{}, errors.Wrap(err, "failed to dial ethereum client")

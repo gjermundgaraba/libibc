@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"math/big"
+	"sync"
 	"time"
 
 	"github.com/briandowns/spinner"
@@ -11,6 +12,8 @@ import (
 )
 
 func scriptCmd() *cobra.Command {
+	var numRepetitions int
+
 	cmd := &cobra.Command{
 		Use:   "script",
 		Short: "Run a script",
@@ -32,7 +35,7 @@ func scriptCmd() *cobra.Command {
 			ethSideClientID := "plz-last-hub-devnet-69"
 			ethRelayerWalletID := "eth-relayer"
 			cosmos := network.GetChain("eureka-hub-dev-6")
-			cosmosSideClientID := "08-wasm-2"
+			// cosmosSideClientID := "08-wasm-2"
 			cosmosRelayerWalletID := "cosmos-relayer"
 			amount := big.NewInt(100)
 			denom := "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14"
@@ -43,50 +46,52 @@ func scriptCmd() *cobra.Command {
 				return errors.Errorf("wallets length mismatch: %d != %d", len(ethWallets), len(cosmosWallets))
 			}
 
-			for range len(ethWallets) {
-				ethWallet := ethWallets[0]
-				cosmosWallet := cosmosWallets[0]
+			var wg sync.WaitGroup
 
-				if err := network.TransferWithRelay(ctx, eth, cosmos, ethSideClientID, ethWallet.GetID(), ethRelayerWalletID, cosmosRelayerWalletID, amount, denom, cosmosWallet.GetAddress()); err != nil {
-					return errors.Wrap(err, "failed to transfer with relay from eth to cosmos")
-				}
+			// Eth to Cosmos transfers
+			for i := range len(ethWallets) {
+				wg.Add(1)
+				go func(idx int) {
+					defer wg.Done()
+					ethWallet := ethWallets[idx]
+					cosmosWallet := cosmosWallets[idx]
+
+					for j := range numRepetitions {
+						if err := network.TransferWithRelay(ctx, eth, cosmos, ethSideClientID, ethWallet.GetID(), ethRelayerWalletID, cosmosRelayerWalletID, amount, denom, cosmosWallet.GetAddress()); err != nil {
+							fmt.Printf("Error transferring from eth to cosmos (wallet %d, iteration %d): %v\n", idx, j, err)
+							continue // Continue with next iteration even if this one fails
+						}
+						fmt.Printf("Completed eth->cosmos transfer %d for wallet %d\n", j+1, idx)
+					}
+				}(i)
 			}
 
-			for range len(ethWallets) {
-				ethWallet := ethWallets[0]
-				cosmosWallet := cosmosWallets[0]
-
-				if err := network.TransferWithRelay(ctx, cosmos, eth, cosmosSideClientID, cosmosWallet.GetID(), cosmosRelayerWalletID, ethRelayerWalletID, amount, denom, ethWallet.GetAddress()); err != nil {
-					return errors.Wrap(err, "failed to transfer with relay from cosmos to eth")
-				}
-			}
-
-			// packet, err := eth.SendTransfer(ctx, clientID, ethWalletID, amount, denom, to)
-			// if err != nil {
-			// 	return errors.Wrap(err, "failed to send transfer from eth to cosmos")
+			// Cosmos to Eth transfers
+			// for i := range len(ethWallets) {
+			// 	wg.Add(1)
+			// 	go func(idx int) {
+			// 		defer wg.Done()
+			// 		ethWallet := ethWallets[idx]
+			// 		cosmosWallet := cosmosWallets[idx]
+			//
+			// 		for j := range numRepetitions {
+			// 			if err := network.TransferWithRelay(ctx, cosmos, eth, cosmosSideClientID, cosmosWallet.GetID(), cosmosRelayerWalletID, ethRelayerWalletID, amount, denom, ethWallet.GetAddress()); err != nil {
+			// 				fmt.Printf("Error transferring from cosmos to eth (wallet %d, iteration %d): %v\n", idx, j, err)
+			// 				continue // Continue with next iteration even if this one fails
+			// 			}
+			// 			fmt.Printf("Completed cosmos->eth transfer %d for wallet %d\n", j+1, idx)
+			// 		}
+			// 	}(i)
 			// }
 			//
-			// dstClient, ok := eth.GetClients()[clientID]
-			// if !ok {
-			// 	return errors.Errorf("client %s not found", clientID)
-			// }
-			// sendRelayTxHash, err := network.Relayer.Relay(ctx, eth, cosmos, dstClient.ClientID, relayerWalletID, []string{packet.TxHash})
-			// if err != nil {
-			// 	return errors.Wrapf(err, "failed to relay transfer tx: %s", packet.TxHash)
-			// }
-			//
-			// logger.Info("Relay send transfer tx hash", zap.String("txHash", sendRelayTxHash))
-			//
-			// ackRelayTxHash, err := network.Relayer.Relay(ctx, eth, cosmos, dstClient.ClientID, relayerWalletID, []string{sendRelayTxHash})
-			// if err != nil {
-			// 	return errors.Wrapf(err, "failed to relay ack tx: %s", packet.TxHash)
-			// }
-			// fmt.Printf("Relay ack tx hash: %s\n", ackRelayTxHash)
+			// Wait for all goroutines to complete
+			wg.Wait()
+			fmt.Println("All transfers completed")
 
 			return nil
 		},
 	}
 
+	cmd.Flags().IntVarP(&numRepetitions, "repetitions", "r", 5, "Number of times to repeat each transfer")
 	return cmd
 }
-
