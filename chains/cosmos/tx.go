@@ -2,6 +2,7 @@ package cosmos
 
 import (
 	"context"
+	"time"
 
 	// dbm "github.com/cosmos/cosmos-db"
 	// "github.com/cosmos/cosmos-sdk/client/tx"
@@ -69,9 +70,9 @@ func (c *Cosmos) submitTx(ctx context.Context, wallet Wallet, msgs ...sdk.Msg) (
 
 	txCfg := authtx.NewTxConfig(c.codec, authtx.DefaultSignModes)
 	txBuilder := txCfg.NewTxBuilder()
-	txBuilder.SetGasLimit(5000000)
+	txBuilder.SetGasLimit(500000)
 	txBuilder.SetMsgs(msgs...)
-	txBuilder.SetFeeAmount(sdk.NewCoins(sdk.NewInt64Coin("uatom", 5000000)))
+	txBuilder.SetFeeAmount(sdk.NewCoins(sdk.NewInt64Coin("uatom", 500000)))
 
 	sigV2 := signing.SignatureV2{
 		PubKey: wallet.PrivateKey.PubKey(),
@@ -128,6 +129,17 @@ func (c *Cosmos) submitTx(ctx context.Context, wallet Wallet, msgs ...sdk.Msg) (
 	}
 	if grpcRes.TxResponse.Code != 0 {
 		return nil, errors.Errorf("tx failed with code %d: %+v", grpcRes.TxResponse.Code, grpcRes.TxResponse)
+	}
+
+	// Just to give it some time to index the tx properly
+	time.Sleep(10 * time.Second)
+
+	txResp, err := txClient.GetTx(ctx, &txtypes.GetTxRequest{Hash: grpcRes.TxResponse.TxHash})
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to query tx %s", grpcRes.TxResponse.TxHash)
+	}
+	if txResp.TxResponse.Code != 0 {
+		return nil, errors.Errorf("tx %s failed with code %d: %+v", grpcRes.TxResponse.TxHash, txResp.TxResponse.Code, txResp.TxResponse)
 	}
 
 	c.logger.Info("tx broadcasted", zap.String("tx_hash", grpcRes.TxResponse.TxHash))

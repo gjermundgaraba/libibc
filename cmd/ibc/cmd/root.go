@@ -7,6 +7,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 var (
@@ -21,7 +22,9 @@ func NewRootCmd() *cobra.Command {
 		Short: "IBC CLI tool",
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			var err error
-			logger, err = zap.NewDevelopment()
+			zapConfig := zap.NewDevelopmentConfig()
+			zapConfig.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
+			logger, err = zapConfig.Build()
 			if err != nil {
 				return errors.Wrap(err, "failed to initialize logger")
 			}
@@ -39,11 +42,12 @@ func NewRootCmd() *cobra.Command {
 	rootCmd.AddCommand(
 		traceCmd(),
 		scriptCmd(),
+		script2Cmd(),
 		relayCmd(),
 		distributeCmd(),
 		generateWalletCmd(),
+		balanceCmd(),
 	)
 
 	return rootCmd
 }
-

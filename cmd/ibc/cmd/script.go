@@ -4,16 +4,19 @@ import (
 	"fmt"
 	"math/big"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/briandowns/spinner"
+	"github.com/gjermundgaraba/libibc/ibc"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 )
 
 func scriptCmd() *cobra.Command {
-	var numRepetitions int
+	var numPacketsPerWallet int
 
 	cmd := &cobra.Command{
 		Use:   "script",
@@ -47,8 +50,8 @@ func scriptCmd() *cobra.Command {
 
 			// TODO: REMOVE
 			// only 5 wallets for each
-			ethWallets = ethWallets[:5]
-			cosmosWallets = cosmosWallets[:5]
+			ethWallets = ethWallets[:3]
+			cosmosWallets = cosmosWallets[:3]
 
 			if len(ethWallets) != len(cosmosWallets) {
 				return errors.Errorf("wallets length mismatch: %d != %d", len(ethWallets), len(cosmosWallets))
@@ -56,78 +59,176 @@ func scriptCmd() *cobra.Command {
 
 			fmt.Printf("will use %d wallets\n", len(ethWallets))
 
-			var wg sync.WaitGroup
+			var transferEg errgroup.Group
+			var relayEg errgroup.Group
 
+			var transfersCompleted atomic.Uint64
+			totalTransfers := uint64(len(ethWallets) * numPacketsPerWallet * 2)
+
+			ethToCosmosMutex := &sync.Mutex{}
 			// Eth to Cosmos transfers
 			for i := range len(ethWallets) {
-				// TODO: REMOVE
-				if i < 100000 {
-					continue
-				}
-				wg.Add(1)
-				go func(idx int) {
-					defer wg.Done()
+				idx := i
+				transferEg.Go(func() error {
 					ethWallet := ethWallets[idx]
 					cosmosWallet := cosmosWallets[idx]
 
-					for j := range numRepetitions {
+					var relayQueue []ibc.Packet
+					for j := range numPacketsPerWallet {
+						currentTransfer := transfersCompleted.Add(1)
 						logger.Info("Transferring from eth to cosmos",
+							zap.Uint64("currentTransfer", currentTransfer),
+							zap.Uint64("totalTransfers", totalTransfers),
 							zap.String("from", ethWallet.GetAddress()),
 							zap.String("from-id", ethWallet.GetID()),
 							zap.String("to-id", cosmosWallet.GetID()),
 							zap.String("to", cosmosWallet.GetAddress()),
 							zap.String("amount", amount.String()),
 						)
-						err := network.TransferWithRelay(ctx, eth, cosmos, ethSideClientID, ethWallet.GetID(), ethRelayerWalletID, cosmosRelayerWalletID, amount, ethDenom, cosmosWallet.GetAddress())
-
-						time.Sleep(5 * time.Second)
+						var packet ibc.Packet
+						err = withRetry(func() error {
+							packet, err = eth.SendTransfer(ctx, ethSideClientID, ethWallet.GetID(), amount, ethDenom, cosmosWallet.GetAddress())
+							return err
+						})
 						if err != nil {
-							fmt.Printf("Error transferring from eth to cosmos (wallet %d, iteration %d): %v\n", idx, j, err)
-							continue // Continue with next iteration even if this one fails
+							return errors.Wrapf(err, "failed to create transfer from eth to cosmos")
 						}
 
-						fmt.Printf("Completed eth->cosmos transfer %d for wallet %d\n", j+1, idx)
+						relayQueue = append(relayQueue, packet)
+
+						if len(relayQueue) >= 10 || j == numPacketsPerWallet-1 {
+							// copy the queue to new variable so we can clear the original queue
+							packetsToRelay := make([]ibc.Packet, len(relayQueue))
+							copy(packetsToRelay, relayQueue)
+							relayQueue = []ibc.Packet{}
+							relayEg.Go(func() error {
+								ethToCosmosMutex.Lock()
+								defer ethToCosmosMutex.Unlock()
+
+								var txIDs []string
+								for _, packet := range relayQueue {
+									txIDs = append(txIDs, packet.TxHash)
+								}
+
+								logger.Info("Relaying eth->cosmos transfer",
+									zap.Uint64("currentTransfer", currentTransfer),
+									zap.Uint64("totalTransfers", totalTransfers),
+									zap.Int("packet-count", len(txIDs)),
+									zap.String("from", ethWallet.GetAddress()),
+									zap.String("to", cosmosWallet.GetAddress()),
+								)
+								if _, err := network.Relayer.Relay(ctx, eth, cosmos, packet.DestinationClient, cosmosRelayerWalletID, txIDs); err != nil {
+									return errors.Wrapf(err, "failed to relay eth->cosmos transfer with txIDs: %v", txIDs)
+								}
+
+								return nil
+							})
+						}
 					}
-				}(i)
+
+					return nil
+				})
 			}
 
+			cosmosToEthMutex := &sync.Mutex{}
 			// Cosmos to Eth transfers
 			for i := range len(cosmosWallets) {
-				wg.Add(1)
-				go func(idx int) {
-					defer wg.Done()
+				idx := i
+				transferEg.Go(func() error {
 					ethWallet := ethWallets[idx]
 					cosmosWallet := cosmosWallets[idx]
 
-					for j := range numRepetitions {
+					var relayQueue []ibc.Packet
+					for j := range numPacketsPerWallet {
+						currentTransfer := transfersCompleted.Add(1)
 						logger.Info("Transferring from cosmos to eth",
+							zap.Uint64("currentTransfer", currentTransfer),
+							zap.Uint64("totalTransfers", totalTransfers),
 							zap.String("from", cosmosWallet.GetAddress()),
 							zap.String("from-id", cosmosWallet.GetID()),
 							zap.String("to-id", ethWallet.GetID()),
 							zap.String("to", ethWallet.GetAddress()),
 							zap.String("amount", amount.String()),
 						)
-						err := network.TransferWithRelay(ctx, cosmos, eth, cosmosSideClientID, cosmosWallet.GetID(), cosmosRelayerWalletID, ethRelayerWalletID, amount, cosmosDenom, ethWallet.GetAddress())
-
-						time.Sleep(10 * time.Second)
+						var packet ibc.Packet
+						err = withRetry(func() error {
+							packet, err = cosmos.SendTransfer(ctx, cosmosSideClientID, cosmosWallet.GetID(), amount, cosmosDenom, ethWallet.GetAddress())
+							return err
+						})
 						if err != nil {
-							fmt.Printf("Error transferring from cosmos to eth (wallet %d, iteration %d): %v\n", idx, j, err)
-							continue // Continue with next iteration even if this one fails
+							return errors.Wrapf(err, "failed to send transfer from cosmos to eth")
 						}
 
-						fmt.Printf("Completed cosmos->eth transfer %d for wallet %d\n", j+1, idx)
+						relayQueue = append(relayQueue, packet)
+
+						if len(relayQueue) >= 10 || j == numPacketsPerWallet-1 {
+							// copy the queue to new variable so we can clear the original queue
+							packetsToRelay := make([]ibc.Packet, len(relayQueue))
+							copy(packetsToRelay, relayQueue)
+							relayQueue = []ibc.Packet{}
+							relayEg.Go(func() error {
+								cosmosToEthMutex.Lock()
+								defer cosmosToEthMutex.Unlock()
+
+								var txIDs []string
+								for _, packet := range relayQueue {
+									txIDs = append(txIDs, packet.TxHash)
+								}
+
+								logger.Info("Relaying cosmos->eth transfer",
+									zap.Uint64("currentTransfer", currentTransfer),
+									zap.Uint64("totalTransfers", totalTransfers),
+									zap.Int("packet-count", len(txIDs)),
+									zap.String("from", cosmosWallet.GetAddress()),
+									zap.String("to", ethWallet.GetAddress()),
+								)
+								if _, err := network.Relayer.Relay(ctx, cosmos, eth, packet.DestinationClient, ethRelayerWalletID, txIDs); err != nil {
+									return errors.Wrapf(err, "failed to relay cosmos->eth transfer with txIDs: %v", txIDs)
+								}
+
+								return nil
+							})
+						}
 					}
-				}(i)
+
+					return nil
+				})
 			}
 
+			defer func() {
+				transfersCompletedUint := transfersCompleted.Load()
+				logger.Info("Script done (error or not)",
+					zap.Uint64("transfers-completed", transfersCompletedUint),
+					zap.Uint64("total-transfers", totalTransfers),
+				)
+			}()
+
 			// Wait for all goroutines to complete
-			wg.Wait()
+			if err := transferEg.Wait(); err != nil {
+				return errors.Wrap(err, "failed to complete transfers")
+			}
+			if err := relayEg.Wait(); err != nil {
+				return errors.Wrap(err, "failed to complete relays")
+			}
 			fmt.Println("All transfers completed")
 
 			return nil
 		},
 	}
 
-	cmd.Flags().IntVarP(&numRepetitions, "repetitions", "r", 5, "Number of times to repeat each transfer")
+	cmd.Flags().IntVarP(&numPacketsPerWallet, "packet-per-wallet", "r", 5, "Number of packets to send per wallet")
 	return cmd
+}
+
+func withRetry(f func() error) error {
+	const maxRetries = 3
+	var err error
+	for range maxRetries {
+		err = f()
+		if err == nil {
+			return nil
+		}
+	}
+
+	return err
 }

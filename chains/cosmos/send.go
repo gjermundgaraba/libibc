@@ -17,7 +17,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func (c *Cosmos) NativeSend(ctx context.Context, senderWalletID string, amount *big.Int, toAddress string) (string, error) {
+func (c *Cosmos) Send(ctx context.Context, senderWalletID string, amount *big.Int, denom string, toAddress string) (string, error) {
 	wallet, ok := c.Wallets[senderWalletID]
 	if !ok {
 		return "", errors.Errorf("sender wallet not found: %s", senderWalletID)
@@ -35,7 +35,7 @@ func (c *Cosmos) NativeSend(ctx context.Context, senderWalletID string, amount *
 		return "", errors.Wrap(err, "failed to get account info")
 	}
 
-	amountCoin := sdk.NewInt64Coin("uatom", amount.Int64())
+	amountCoin := sdk.NewInt64Coin(denom, amount.Int64())
 	sendMsg := banktypes.NewMsgSend(
 		sdk.MustAccAddressFromBech32(fromAddress),
 		sdk.MustAccAddressFromBech32(toAddress),
@@ -107,7 +107,7 @@ func (c *Cosmos) NativeSend(ctx context.Context, senderWalletID string, amount *
 		return "", errors.Errorf("transaction failed with code %d: %s", grpcRes.TxResponse.Code, grpcRes.TxResponse.RawLog)
 	}
 
-	c.logger.Info("Native send transaction broadcasted", zap.String("tx_hash", grpcRes.TxResponse.TxHash), zap.String("from", fromAddress), zap.String("to", toAddress), zap.String("amount", amount.String()))
+	c.logger.Info("Send transaction broadcasted", zap.String("tx_hash", grpcRes.TxResponse.TxHash), zap.String("from", fromAddress), zap.String("to", toAddress), zap.String("amount", amount.String()), zap.String("denom", denom))
 
 	return grpcRes.TxResponse.TxHash, nil
 }

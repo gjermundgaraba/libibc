@@ -12,6 +12,7 @@ import (
 func generateWalletCmd() *cobra.Command {
 	var fundFromWallet string
 	var fundAmount string
+	var denom string
 
 	cmd := &cobra.Command{
 		Use:   "generate-wallet [chain-id] [new-wallet-id]",
@@ -24,6 +25,15 @@ func generateWalletCmd() *cobra.Command {
 
 			if (fundFromWallet == "") != (fundAmount == "") {
 				return errors.New("either both --fund-from-wallet and --fund-amount must be set or neither")
+			}
+			
+			// Set default denom if not provided
+			if denom == "" && fundAmount != "" {
+				if chainID == "ethereum" {
+					denom = "eth"
+				} else {
+					denom = "uatom" // Default for Cosmos chains
+				}
 			}
 
 			network, err := cfg.ToNetwork(ctx, logger)
@@ -85,7 +95,7 @@ func generateWalletCmd() *cobra.Command {
 					return errors.New("invalid fund amount, must be a valid integer")
 				}
 
-				txHash, err := chain.NativeSend(ctx, fundFromWallet, amount, wallet.GetAddress())
+				txHash, err := chain.Send(ctx, fundFromWallet, amount, denom, wallet.GetAddress())
 				if err != nil {
 					return errors.Wrap(err, "failed to fund new wallet")
 				}
@@ -94,6 +104,7 @@ func generateWalletCmd() *cobra.Command {
 					zap.String("from_wallet", fundFromWallet),
 					zap.String("to_wallet", newWalletID),
 					zap.String("amount", amount.String()),
+					zap.String("denom", denom),
 					zap.String("tx_hash", txHash))
 			}
 
@@ -108,7 +119,7 @@ func generateWalletCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&fundFromWallet, "fund-from-wallet", "", "Optional wallet ID to fund the new wallet from")
 	cmd.Flags().StringVar(&fundAmount, "fund-amount", "", "Optional amount to fund the new wallet with")
+	cmd.Flags().StringVar(&denom, "denom", "", "Token denomination for funding (e.g., 'uatom' for Cosmos, 'eth' for Ethereum, or ERC20 contract address)")
 
 	return cmd
 }
-

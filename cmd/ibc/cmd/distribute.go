@@ -11,17 +11,22 @@ import (
 
 func distributeCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "distribute [chain-id] [wallet-id] [amount]",
-		Short: "Distribute tokens evenly to all other wallets on a chain",
-		Args:  cobra.ExactArgs(3),
+		Use:   "distribute [chain-id] [wallet-id] [denom] [minimum-amount]",
+		Short: "Distribute tokens to ensure all wallets have at least the minimum amount",
+		Long: `Distribute tokens from a sender wallet to all other wallets on a chain to ensure they have at least the minimum amount.
+- Each recipient's balance is checked and tokens are only sent if their balance is below the minimum amount.
+- If a recipient's balance is already equal to or higher than the minimum amount, no tokens are sent.
+- The denom argument specifies which token to distribute (e.g., 'uatom' for Cosmos, 'eth' for Ethereum, or ERC20 contract address).`,
+		Args: cobra.ExactArgs(4),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			chainID := args[0]
 			senderWalletID := args[1]
-
-			amount, success := new(big.Int).SetString(args[2], 10)
+			denom := args[2]
+			
+			minimumAmount, success := new(big.Int).SetString(args[3], 10)
 			if !success {
-				return errors.New("invalid amount, must be a valid integer")
+				return errors.New("invalid minimum amount, must be a valid integer")
 			}
 
 			network, err := cfg.ToNetwork(ctx, logger)
@@ -43,14 +48,47 @@ func distributeCmd() *cobra.Command {
 				zap.String("chain", chainID),
 				zap.String("sender", senderWalletID),
 				zap.Int("num_recipients", len(wallets)-1),
-				zap.String("amount_per_recipient", amount.String()))
+				zap.String("minimum_amount", minimumAmount.String()),
+				zap.String("denom", denom))
 
 			for _, wallet := range wallets {
 				if wallet.GetID() == senderWalletID {
 					continue
 				}
 
-				txHash, err := chain.NativeSend(ctx, senderWalletID, amount, wallet.GetAddress())
+				// Check current balance
+				currentBalance, err := chain.GetBalance(ctx, wallet.GetAddress(), denom)
+				if err != nil {
+					return errors.Wrapf(err, "failed to query balance for %s", wallet.GetID())
+				}
+				
+				logger.Info("Checking current balance",
+					zap.String("wallet_id", wallet.GetID()),
+					zap.String("address", wallet.GetAddress()),
+					zap.String("current_balance", currentBalance.String()),
+					zap.String("minimum_amount", minimumAmount.String()))
+				
+				// If current balance is already >= minimumAmount, skip this wallet
+				if currentBalance.Cmp(minimumAmount) >= 0 {
+					logger.Info("Skipping wallet as balance already meets or exceeds minimum amount",
+						zap.String("wallet_id", wallet.GetID()),
+						zap.String("address", wallet.GetAddress()),
+						zap.String("current_balance", currentBalance.String()),
+						zap.String("minimum_amount", minimumAmount.String()))
+					continue
+				}
+				
+				// Calculate amount needed to reach minimum
+				amountToSend := new(big.Int).Sub(minimumAmount, currentBalance)
+				
+				logger.Info("Sending additional tokens to reach minimum amount",
+					zap.String("wallet_id", wallet.GetID()),
+					zap.String("current_balance", currentBalance.String()),
+					zap.String("amount_to_send", amountToSend.String()),
+					zap.String("target_minimum", minimumAmount.String()))
+				
+				// Send the calculated amount
+				txHash, err := chain.Send(ctx, senderWalletID, amountToSend, denom, wallet.GetAddress())
 				if err != nil {
 					return errors.Wrapf(err, "failed to send tokens to %s", wallet.GetID())
 				}
@@ -62,7 +100,8 @@ func distributeCmd() *cobra.Command {
 					zap.String("from", senderWalletID),
 					zap.String("to", wallet.GetID()),
 					zap.String("to_address", wallet.GetAddress()),
-					zap.String("amount", amount.String()),
+					zap.String("amount", amountToSend.String()),
+					zap.String("denom", denom),
 					zap.String("tx_hash", txHash))
 			}
 

@@ -2,9 +2,11 @@ package cosmos
 
 import (
 	"context"
+	"math/big"
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	txtypes "github.com/cosmos/cosmos-sdk/types/tx"
+	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	"github.com/gjermundgaraba/libibc/chains/network"
 	"github.com/gjermundgaraba/libibc/ibc"
 	"github.com/gjermundgaraba/libibc/utils"
@@ -72,4 +74,23 @@ func (c *Cosmos) QueryTx(ctx context.Context, txHash string) (*txtypes.GetTxResp
 		return nil, errors.Wrapf(err, "failed to query transaction %s", txHash)
 	}
 	return txResponse, nil
+}
+
+// GetBalance implements network.Chain.
+func (c *Cosmos) GetBalance(ctx context.Context, address string, denom string) (*big.Int, error) {
+	grpcConn, err := utils.GetGRPC(c.grpcAddr)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get grpc connection")
+	}
+
+	bankClient := banktypes.NewQueryClient(grpcConn)
+	resp, err := bankClient.Balance(ctx, &banktypes.QueryBalanceRequest{
+		Address: address,
+		Denom:   denom,
+	})
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to query balance for address %s and denom %s", address, denom)
+	}
+
+	return new(big.Int).SetInt64(resp.Balance.Amount.Int64()), nil
 }

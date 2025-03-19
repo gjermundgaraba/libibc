@@ -37,7 +37,8 @@ type Chain interface {
 
 	SubmitRelayTx(ctx context.Context, txBz []byte, walletID string) (string, error)
 	SendTransfer(ctx context.Context, clientID string, walletID string, amount *big.Int, denom string, to string) (ibc.Packet, error)
-	NativeSend(ctx context.Context, walletID string, amount *big.Int, toAddress string) (string, error)
+	Send(ctx context.Context, walletID string, amount *big.Int, denom string, toAddress string) (string, error)
+	GetBalance(ctx context.Context, address string, denom string) (*big.Int, error)
 }
 
 type Wallet interface {
