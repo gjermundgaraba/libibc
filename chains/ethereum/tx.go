@@ -11,18 +11,20 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/gjermundgaraba/libibc/chains/network"
 	"github.com/gjermundgaraba/libibc/utils"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
 
 // SubmitTx implements network.Chain.
-func (e *Ethereum) SubmitRelayTx(ctx context.Context, txBz []byte, walletID string) (string, error) {
-	wallet, ok := e.Wallets[walletID]
+func (e *Ethereum) SubmitRelayTx(ctx context.Context, txBz []byte, wallet network.Wallet) (string, error) {
+	ethereumWallet, ok := wallet.(*Wallet)
 	if !ok {
-		return "", errors.New("wallet not found")
+		return "", errors.Errorf("invalid wallet type: %T", wallet)
 	}
-	receipt, err := e.Transact(ctx, wallet, func(ethClient *ethclient.Client, txOpts *bind.TransactOpts) (*ethtypes.Transaction, error) {
+
+	receipt, err := e.Transact(ctx, ethereumWallet, func(ethClient *ethclient.Client, txOpts *bind.TransactOpts) (*ethtypes.Transaction, error) {
 		unsignedTx := ethtypes.NewTransaction(
 			txOpts.Nonce.Uint64(),
 			e.ics26Address,
@@ -53,13 +55,13 @@ func (e *Ethereum) SubmitRelayTx(ctx context.Context, txBz []byte, walletID stri
 	return receipt.TxHash.String(), nil
 }
 
-func (e *Ethereum) Transact(ctx context.Context, wallet Wallet, doTx func(*ethclient.Client, *bind.TransactOpts) (*ethtypes.Transaction, error)) (*ethtypes.Receipt, error) {
+func (e *Ethereum) Transact(ctx context.Context, wallet *Wallet, doTx func(*ethclient.Client, *bind.TransactOpts) (*ethtypes.Transaction, error)) (*ethtypes.Receipt, error) {
 	ethClient, err := ethclient.Dial(e.ethRPC)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to dial ethereum client")
 	}
 
-	txOpts, err := GetTransactOpts(ctx, ethClient, e.actualChainID, wallet.PrivateKey, 5)
+	txOpts, err := GetTransactOpts(ctx, ethClient, e.actualChainID, wallet.privateKey, 5)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get transact opts")
 	}

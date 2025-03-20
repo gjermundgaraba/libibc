@@ -14,9 +14,9 @@ import (
 var _ network.Wallet = &Wallet{}
 
 type Wallet struct {
-	ID         string
-	Address    cryptotypes.Address
-	PrivateKey *secp256k1.PrivKey
+	id         string
+	address    cryptotypes.Address
+	privateKey *secp256k1.PrivKey
 }
 
 func (c *Cosmos) AddWallet(walletID string, privateKeyHex string) error {
@@ -27,9 +27,9 @@ func (c *Cosmos) AddWallet(walletID string, privateKeyHex string) error {
 	privKey := &secp256k1.PrivKey{Key: keyBytes}
 
 	c.Wallets[walletID] = Wallet{
-		ID:         walletID,
-		Address:    privKey.PubKey().Address(),
-		PrivateKey: privKey,
+		id:         walletID,
+		address:    privKey.PubKey().Address(),
+		privateKey: privKey,
 	}
 
 	return nil
@@ -50,9 +50,9 @@ func (c *Cosmos) GenerateWallet(walletID string) (network.Wallet, error) {
 
 	// Create wallet
 	wallet := Wallet{
-		ID:         walletID,
-		Address:    privKey.PubKey().Address(),
-		PrivateKey: privKey,
+		id:         walletID,
+		address:    privKey.PubKey().Address(),
+		privateKey: privKey,
 	}
 
 	// Store wallet
@@ -71,16 +71,16 @@ func (c *Cosmos) GetWallets() []network.Wallet {
 }
 
 // GetAddress implements network.Wallet.
-func (w *Wallet) GetAddress() string {
-	return sdk.AccAddress(w.Address).String()
+func (w *Wallet) Address() string {
+	return sdk.AccAddress(w.address).String()
 }
 
 // GetID implements network.Wallet.
-func (w *Wallet) GetID() string {
-	return w.ID
+func (w *Wallet) ID() string {
+	return w.id
 }
 
 // GetPrivateKeyHex implements network.Wallet.
-func (w *Wallet) GetPrivateKeyHex() string {
-	return hex.EncodeToString(w.PrivateKey.Key)
+func (w *Wallet) PrivateKeyHex() string {
+	return hex.EncodeToString(w.privateKey.Key)
 }

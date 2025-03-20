@@ -15,6 +15,10 @@ func relayCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+			logger, err := createStandardLogger()
+			if err != nil {
+				return errors.Wrap(err, "failed to create logger")
+			}
 
 			network, err := cfg.ToNetwork(ctx, logger)
 			if err != nil {
@@ -26,6 +30,10 @@ func relayCmd() *cobra.Command {
 			txHash := args[2]
 
 			relayerWalletID := "relayer"
+			relayerWallet, err := fromChain.GetWallet(relayerWalletID)
+			if err != nil {
+				return errors.Wrapf(err, "failed to get wallet %s", relayerWalletID)
+			}
 			if !strings.HasPrefix(txHash, "0x") {
 				relayerWalletID = "ggeth"
 			}
@@ -38,7 +46,7 @@ func relayCmd() *cobra.Command {
 				return errors.Errorf("expected 1 packet, got %d", len(packets))
 			}
 
-			relayTxHash, err := network.Relayer.Relay(ctx, fromChain, toChain, packets[0].DestinationClient, relayerWalletID, []string{txHash})
+			relayTxHash, err := network.Relayer.Relay(ctx, fromChain, toChain, packets[0].DestinationClient, relayerWallet, []string{txHash})
 			if err != nil {
 				return errors.Wrapf(err, "failed to relay transfer tx: %s", packets[0].TxHash)
 			}

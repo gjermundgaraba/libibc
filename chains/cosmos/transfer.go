@@ -9,6 +9,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	transfertypes "github.com/cosmos/ibc-go/v10/modules/apps/transfer/types"
 	channeltypesv2 "github.com/cosmos/ibc-go/v10/modules/core/04-channel/v2/types"
+	"github.com/gjermundgaraba/libibc/chains/network"
 	"github.com/gjermundgaraba/libibc/ibc"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
@@ -18,14 +19,14 @@ import (
 func (c *Cosmos) SendTransfer(
 	ctx context.Context,
 	clientID string,
-	walletID string,
+	wallet network.Wallet,
 	amount *big.Int,
 	denom string,
 	to string,
 ) (ibc.Packet, error) {
-	wallet, ok := c.Wallets[walletID]
+	cosmosWallet, ok := wallet.(*Wallet)
 	if !ok {
-		return ibc.Packet{}, errors.Errorf("failed to get sending wallet for SendTransfer: %s", walletID)
+		return ibc.Packet{}, errors.Errorf("invalid wallet type: %T", wallet)
 	}
 
 	timeout := uint64(time.Now().Add(6 * time.Hour).Unix())
@@ -34,7 +35,7 @@ func (c *Cosmos) SendTransfer(
 	transferPayload := transfertypes.FungibleTokenPacketData{
 		Denom:    transferCoin.Denom,
 		Amount:   transferCoin.Amount.String(),
-		Sender:   wallet.GetAddress(),
+		Sender:   wallet.Address(),
 		Receiver: to,
 		Memo:     "", // TODO: add memo for load testing purposed
 	}
@@ -56,10 +57,10 @@ func (c *Cosmos) SendTransfer(
 		Payloads: []channeltypesv2.Payload{
 			payload,
 		},
-		Signer: wallet.GetAddress(),
+		Signer: wallet.Address(),
 	}
 
-	resp, err := c.submitTx(ctx, wallet, &msgSendPacket)
+	resp, err := c.submitTx(ctx, cosmosWallet, &msgSendPacket)
 	if err != nil {
 		return ibc.Packet{}, errors.Wrap(err, "failed to submit tx")
 	}
@@ -72,7 +73,7 @@ func (c *Cosmos) SendTransfer(
 		return ibc.Packet{}, errors.Errorf("failed to get packet for transfer (expected 1, got %d)", len(packets))
 	}
 
-	c.logger.Info("Sent transfer", zap.String("tx_hash", resp.TxResponse.TxHash), zap.String("from", wallet.GetAddress()), zap.String("to", to), zap.Uint64("amount", amount.Uint64()), zap.String("denom", denom))
+	c.logger.Info("Sent transfer", zap.String("tx_hash", resp.TxResponse.TxHash), zap.String("from", wallet.Address()), zap.String("to", to), zap.Uint64("amount", amount.Uint64()), zap.String("denom", denom))
 
 	return packets[0], nil
 }

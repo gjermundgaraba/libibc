@@ -14,9 +14,9 @@ import (
 var _ network.Wallet = &Wallet{}
 
 type Wallet struct {
-	ID         string
-	Address    ethcommon.Address
-	PrivateKey *ecdsa.PrivateKey
+	id         string
+	address    ethcommon.Address
+	privateKey *ecdsa.PrivateKey
 }
 
 // AddWallet implements network.Chain.
@@ -32,9 +32,9 @@ func (e *Ethereum) AddWallet(walletID string, privateKeyHex string) error {
 	}
 
 	e.Wallets[walletID] = Wallet{
-		ID:         walletID,
-		Address:    crypto.PubkeyToAddress(privKey.PublicKey),
-		PrivateKey: privKey,
+		id:         walletID,
+		address:    crypto.PubkeyToAddress(privKey.PublicKey),
+		privateKey: privKey,
 	}
 
 	return nil
@@ -59,9 +59,9 @@ func (e *Ethereum) GenerateWallet(walletID string) (network.Wallet, error) {
 
 	// Create wallet
 	wallet := Wallet{
-		ID:         walletID,
-		Address:    crypto.PubkeyToAddress(privKey.PublicKey),
-		PrivateKey: privKey,
+		id:         walletID,
+		address:    crypto.PubkeyToAddress(privKey.PublicKey),
+		privateKey: privKey,
 	}
 
 	// Store wallet
@@ -80,16 +80,16 @@ func (e *Ethereum) GetWallets() []network.Wallet {
 }
 
 // GetID implements network.Wallet.
-func (w *Wallet) GetID() string {
-	return w.ID
+func (w *Wallet) ID() string {
+	return w.id
 }
 
 // GetAddress implements network.Wallet.
-func (w *Wallet) GetAddress() string {
-	return w.Address.String()
+func (w *Wallet) Address() string {
+	return w.address.String()
 }
 
 // GetPrivateKeyHex implements network.Wallet.
-func (w *Wallet) GetPrivateKeyHex() string {
-	return hex.EncodeToString(crypto.FromECDSA(w.PrivateKey))
+func (w *Wallet) PrivateKeyHex() string {
+	return hex.EncodeToString(crypto.FromECDSA(w.privateKey))
 }

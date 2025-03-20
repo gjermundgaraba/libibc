@@ -12,17 +12,18 @@ import (
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	accounttypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
+	"github.com/gjermundgaraba/libibc/chains/network"
 	"github.com/gjermundgaraba/libibc/utils"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
 
-func (c *Cosmos) Send(ctx context.Context, senderWalletID string, amount *big.Int, denom string, toAddress string) (string, error) {
-	wallet, ok := c.Wallets[senderWalletID]
+func (c *Cosmos) Send(ctx context.Context, senderWallet network.Wallet, amount *big.Int, denom string, toAddress string) (string, error) {
+	cosmosWallet, ok := senderWallet.(*Wallet)
 	if !ok {
-		return "", errors.Errorf("sender wallet not found: %s", senderWalletID)
+		return "", errors.Errorf("invalid wallet type: %T", senderWallet)
 	}
-	fromAddress := wallet.GetAddress()
+	fromAddress := senderWallet.Address()
 
 	grpcConn, err := utils.GetGRPC(c.grpcAddr)
 	if err != nil {
@@ -50,7 +51,7 @@ func (c *Cosmos) Send(ctx context.Context, senderWalletID string, amount *big.In
 	txBuilder.SetMsgs(sendMsg)
 
 	sigV2 := signing.SignatureV2{
-		PubKey: wallet.PrivateKey.PubKey(),
+		PubKey: cosmosWallet.privateKey.PubKey(),
 		Data: &signing.SingleSignatureData{
 			SignMode:  signing.SignMode(txCfg.SignModeHandler().DefaultMode()),
 			Signature: nil,
@@ -73,7 +74,7 @@ func (c *Cosmos) Send(ctx context.Context, senderWalletID string, amount *big.In
 		signing.SignMode(txCfg.SignModeHandler().DefaultMode()),
 		signerData,
 		txBuilder,
-		wallet.PrivateKey,
+		cosmosWallet.privateKey,
 		txCfg,
 		accountRes.Info.Sequence,
 	)
@@ -111,4 +112,3 @@ func (c *Cosmos) Send(ctx context.Context, senderWalletID string, amount *big.In
 
 	return grpcRes.TxResponse.TxHash, nil
 }
-

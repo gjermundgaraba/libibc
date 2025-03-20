@@ -10,7 +10,7 @@ import (
 )
 
 func generateWalletCmd() *cobra.Command {
-	var fundFromWallet string
+	var fundFromWalletId string
 	var fundAmount string
 	var denom string
 
@@ -20,13 +20,17 @@ func generateWalletCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+			logger, err := createStandardLogger()
+			if err != nil {
+				return errors.Wrap(err, "failed to create logger")
+			}
 			chainID := args[0]
 			newWalletID := args[1]
 
-			if (fundFromWallet == "") != (fundAmount == "") {
+			if (fundFromWalletId == "") != (fundAmount == "") {
 				return errors.New("either both --fund-from-wallet and --fund-amount must be set or neither")
 			}
-			
+
 			// Set default denom if not provided
 			if denom == "" && fundAmount != "" {
 				if chainID == "ethereum" {
@@ -57,9 +61,9 @@ func generateWalletCmd() *cobra.Command {
 
 			logger.Info("Generated new wallet",
 				zap.String("chain_id", chainID),
-				zap.String("wallet_id", wallet.GetID()),
-				zap.String("address", wallet.GetAddress()),
-				zap.String("private_key", wallet.GetPrivateKeyHex()))
+				zap.String("wallet_id", wallet.ID()),
+				zap.String("address", wallet.Address()),
+				zap.String("private_key", wallet.PrivateKeyHex()))
 
 			for i, chainConfig := range cfg.Chains {
 				if chainConfig.ChainID == chainID {
@@ -72,7 +76,7 @@ func generateWalletCmd() *cobra.Command {
 			for i, walletConfig := range cfg.Wallets {
 				if walletConfig.WalletID == newWalletID {
 					// Update existing wallet
-					cfg.Wallets[i].PrivateKey = wallet.GetPrivateKeyHex()
+					cfg.Wallets[i].PrivateKey = wallet.PrivateKeyHex()
 					walletExists = true
 					break
 				}
@@ -81,7 +85,7 @@ func generateWalletCmd() *cobra.Command {
 			if !walletExists {
 				cfg.Wallets = append(cfg.Wallets, config.WalletConfig{
 					WalletID:   newWalletID,
-					PrivateKey: wallet.GetPrivateKeyHex(),
+					PrivateKey: wallet.PrivateKeyHex(),
 				})
 			}
 
@@ -89,19 +93,24 @@ func generateWalletCmd() *cobra.Command {
 				return errors.Wrap(err, "failed to save config")
 			}
 
-			if fundFromWallet != "" && fundAmount != "" {
+			if fundFromWalletId != "" && fundAmount != "" {
 				amount, success := new(big.Int).SetString(fundAmount, 10)
 				if !success {
 					return errors.New("invalid fund amount, must be a valid integer")
 				}
 
-				txHash, err := chain.Send(ctx, fundFromWallet, amount, denom, wallet.GetAddress())
+				fundFromWallet, err := chain.GetWallet(fundFromWalletId)
+				if err != nil {
+					return errors.Wrapf(err, "failed to get wallet %s", fundFromWalletId)
+				}
+
+				txHash, err := chain.Send(ctx, fundFromWallet, amount, denom, wallet.Address())
 				if err != nil {
 					return errors.Wrap(err, "failed to fund new wallet")
 				}
 
 				logger.Info("Funded new wallet",
-					zap.String("from_wallet", fundFromWallet),
+					zap.String("from_wallet", fundFromWalletId),
 					zap.String("to_wallet", newWalletID),
 					zap.String("amount", amount.String()),
 					zap.String("denom", denom),
@@ -117,7 +126,7 @@ func generateWalletCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&fundFromWallet, "fund-from-wallet", "", "Optional wallet ID to fund the new wallet from")
+	cmd.Flags().StringVar(&fundFromWalletId, "fund-from-wallet", "", "Optional wallet ID to fund the new wallet from")
 	cmd.Flags().StringVar(&fundAmount, "fund-amount", "", "Optional amount to fund the new wallet with")
 	cmd.Flags().StringVar(&denom, "denom", "", "Token denomination for funding (e.g., 'uatom' for Cosmos, 'eth' for Ethereum, or ERC20 contract address)")
 

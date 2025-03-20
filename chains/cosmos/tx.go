@@ -15,13 +15,19 @@ import (
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	accounttypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	"github.com/cosmos/gogoproto/proto"
+	"github.com/gjermundgaraba/libibc/chains/network"
 	"github.com/gjermundgaraba/libibc/utils"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
 
 // SubmitTx implements network.Chain.
-func (c *Cosmos) SubmitRelayTx(ctx context.Context, txBz []byte, walletID string) (string, error) {
+func (c *Cosmos) SubmitRelayTx(ctx context.Context, txBz []byte, wallet network.Wallet) (string, error) {
+	cosmosWallet, ok := wallet.(*Wallet)
+	if !ok {
+		return "", errors.Errorf("invalid wallet type: %T", wallet)
+	}
+
 	// Extract messages from the response (cosmos specific)
 	var txBody txtypes.TxBody
 	if err := proto.Unmarshal(txBz, &txBody); err != nil {
@@ -42,12 +48,7 @@ func (c *Cosmos) SubmitRelayTx(ctx context.Context, txBz []byte, walletID string
 		msgs = append(msgs, sdkMsg)
 	}
 
-	wallet, ok := c.Wallets[walletID]
-	if !ok {
-		return "", errors.New("wallet not found")
-	}
-
-	grpcRes, err := c.submitTx(ctx, wallet, msgs...)
+	grpcRes, err := c.submitTx(ctx, cosmosWallet, msgs...)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to submit tx")
 	}
@@ -55,7 +56,7 @@ func (c *Cosmos) SubmitRelayTx(ctx context.Context, txBz []byte, walletID string
 	return grpcRes.TxResponse.TxHash, nil
 }
 
-func (c *Cosmos) submitTx(ctx context.Context, wallet Wallet, msgs ...sdk.Msg) (*txtypes.BroadcastTxResponse, error) {
+func (c *Cosmos) submitTx(ctx context.Context, wallet *Wallet, msgs ...sdk.Msg) (*txtypes.BroadcastTxResponse, error) {
 	grpcConn, err := utils.GetGRPC(c.grpcAddr)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get grpc connection")
@@ -63,7 +64,7 @@ func (c *Cosmos) submitTx(ctx context.Context, wallet Wallet, msgs ...sdk.Msg) (
 
 	// Get account for sequence and account number
 	accountClient := accounttypes.NewQueryClient(grpcConn)
-	accountRes, err := accountClient.AccountInfo(ctx, &accounttypes.QueryAccountInfoRequest{Address: wallet.GetAddress()})
+	accountRes, err := accountClient.AccountInfo(ctx, &accounttypes.QueryAccountInfoRequest{Address: wallet.Address()})
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get account info")
 	}
@@ -75,7 +76,7 @@ func (c *Cosmos) submitTx(ctx context.Context, wallet Wallet, msgs ...sdk.Msg) (
 	txBuilder.SetFeeAmount(sdk.NewCoins(sdk.NewInt64Coin("uatom", 500000)))
 
 	sigV2 := signing.SignatureV2{
-		PubKey: wallet.PrivateKey.PubKey(),
+		PubKey: wallet.privateKey.PubKey(),
 		Data: &signing.SingleSignatureData{
 			SignMode:  signing.SignMode(txCfg.SignModeHandler().DefaultMode()),
 			Signature: nil,
@@ -88,7 +89,7 @@ func (c *Cosmos) submitTx(ctx context.Context, wallet Wallet, msgs ...sdk.Msg) (
 	}
 
 	signerData := xauthsigning.SignerData{
-		Address:       wallet.GetAddress(),
+		Address:       wallet.Address(),
 		ChainID:       c.ChainID,
 		AccountNumber: accountRes.Info.AccountNumber,
 	}
@@ -97,7 +98,7 @@ func (c *Cosmos) submitTx(ctx context.Context, wallet Wallet, msgs ...sdk.Msg) (
 		signing.SignMode(txCfg.SignModeHandler().DefaultMode()),
 		signerData,
 		txBuilder,
-		wallet.PrivateKey,
+		wallet.privateKey,
 		txCfg,
 		accountRes.Info.Sequence,
 	)

@@ -11,6 +11,7 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/gjermundgaraba/libibc/chains/ethereum/erc20"
+	"github.com/gjermundgaraba/libibc/chains/network"
 	"github.com/gjermundgaraba/libibc/ibc"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
@@ -20,12 +21,16 @@ import (
 func (e *Ethereum) SendTransfer(
 	ctx context.Context,
 	clientID string,
-	walletID string,
+	wallet network.Wallet,
 	amount *big.Int,
 	denom string,
 	to string,
 ) (ibc.Packet, error) {
-	e.logger.Info("Sending transfer", zap.String("from", walletID), zap.String("to", to), zap.Uint64("amount", amount.Uint64()), zap.String("denom", denom))
+	ethereumWallet, ok := wallet.(*Wallet)
+	if !ok {
+		return ibc.Packet{}, errors.Errorf("invalid wallet type: %T", wallet)
+	}
+
 	ethClient, err := ethclient.Dial(e.ethRPC)
 	if err != nil {
 		return ibc.Packet{}, errors.Wrap(err, "failed to dial ethereum client")
@@ -42,15 +47,13 @@ func (e *Ethereum) SendTransfer(
 		return ibc.Packet{}, errors.Wrap(err, "failed to get ics20 contract")
 	}
 
-	wallet := e.Wallets[walletID]
-
-	currentApproval, err := erc20Contract.Allowance(nil, wallet.Address, e.ics20Address)
+	currentApproval, err := erc20Contract.Allowance(nil, ethereumWallet.address, e.ics20Address)
 	if err != nil {
 		return ibc.Packet{}, errors.Wrap(err, "failed to get current approval")
 	}
 
 	if currentApproval.Cmp(amount) < 0 {
-		if _, err := e.Transact(ctx, wallet, func(ethClient *ethclient.Client, txOpts *bind.TransactOpts) (*ethtypes.Transaction, error) {
+		if _, err := e.Transact(ctx, ethereumWallet, func(ethClient *ethclient.Client, txOpts *bind.TransactOpts) (*ethtypes.Transaction, error) {
 			return erc20Contract.Approve(txOpts, e.ics20Address, amount)
 		}); err != nil {
 			return ibc.Packet{}, errors.Wrap(err, "failed to approve transfer")
@@ -71,7 +74,7 @@ func (e *Ethereum) SendTransfer(
 		Memo:             "",
 	}
 
-	receipt, err := e.Transact(ctx, wallet, func(ethClient *ethclient.Client, txOpts *bind.TransactOpts) (*ethtypes.Transaction, error) {
+	receipt, err := e.Transact(ctx, ethereumWallet, func(ethClient *ethclient.Client, txOpts *bind.TransactOpts) (*ethtypes.Transaction, error) {
 		return ics20Contract.SendTransfer(txOpts, sendTransferMsg)
 	})
 	if err != nil {
@@ -86,7 +89,7 @@ func (e *Ethereum) SendTransfer(
 		return ibc.Packet{}, errors.Errorf("failed to get packet for transfer (expected 1, got %d)", len(packets))
 	}
 
-	e.logger.Info("Sent transfer", zap.String("tx_hash", receipt.TxHash.String()), zap.String("from", wallet.Address.Hex()), zap.String("to", to), zap.Uint64("amount", amount.Uint64()), zap.String("denom", denom))
+	e.logger.Info("Sent transfer", zap.String("tx_hash", receipt.TxHash.String()), zap.String("from", wallet.Address()), zap.String("to", to), zap.Uint64("amount", amount.Uint64()), zap.String("denom", denom))
 
 	return packets[0], nil
 }

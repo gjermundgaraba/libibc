@@ -13,7 +13,6 @@ import (
 var (
 	cfgFile string
 	cfg     *config.Config
-	logger  *zap.Logger
 )
 
 func NewRootCmd() *cobra.Command {
@@ -22,13 +21,6 @@ func NewRootCmd() *cobra.Command {
 		Short: "IBC CLI tool",
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			var err error
-			zapConfig := zap.NewDevelopmentConfig()
-			zapConfig.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
-			logger, err = zapConfig.Build()
-			if err != nil {
-				return errors.Wrap(err, "failed to initialize logger")
-			}
-
 			cfg, err = config.LoadConfig(cfgFile)
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
@@ -42,12 +34,24 @@ func NewRootCmd() *cobra.Command {
 	rootCmd.AddCommand(
 		traceCmd(),
 		scriptCmd(),
-		script2Cmd(),
 		relayCmd(),
 		distributeCmd(),
 		generateWalletCmd(),
 		balanceCmd(),
+		tuiCmd(),
 	)
 
 	return rootCmd
 }
+
+func createStandardLogger() (*zap.Logger, error) {
+	zapConfig := zap.NewDevelopmentConfig()
+	zapConfig.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
+	logger, err := zapConfig.Build()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to initialize logger")
+	}
+
+	return logger, nil
+}
+
