@@ -15,15 +15,17 @@ type RelayerQueue struct {
 	logger *zap.Logger
 
 	relayer          Relayer
-	relayMutex       sync.Mutex
+	relayMutex       sync.RWMutex
 	relayerWallet    Wallet
 	sourceChain      Chain
 	destinationChain Chain
 
 	// queue of packets to relay
-	queue      []ibc.Packet
-	queueSize  int
-	queueMutex sync.Mutex
+	queue             []ibc.Packet
+	queueSize         int
+	queueMutex        sync.RWMutex
+	currentlyRelaying int
+	relaysCompleted   int
 
 	errGroup *errgroup.Group
 }
@@ -33,14 +35,14 @@ func (n *Network) NewRelayerQueue(logger *zap.Logger, sourceChain Chain, destina
 		logger: logger,
 
 		relayer:          n.Relayer,
-		relayMutex:       sync.Mutex{},
+		relayMutex:       sync.RWMutex{},
 		relayerWallet:    relayerWallet,
 		sourceChain:      sourceChain,
 		destinationChain: destinationChain,
 
 		queue:      make([]ibc.Packet, 0),
 		queueSize:  queueSize,
-		queueMutex: sync.Mutex{},
+		queueMutex: sync.RWMutex{},
 
 		errGroup: &errgroup.Group{},
 	}
@@ -59,25 +61,33 @@ func (rq *RelayerQueue) Add(packet ibc.Packet) {
 	}
 }
 
+func (rq *RelayerQueue) Status() (currentInQueue int, currentlyRelaying int, relayesCompleted int) {
+	rq.queueMutex.RLock()
+	defer rq.queueMutex.RUnlock()
+	rq.relayMutex.RLock()
+	defer rq.relayMutex.RUnlock()
+
+	return len(rq.queue), rq.currentlyRelaying, rq.relaysCompleted
+}
+
 func (rq *RelayerQueue) Flush() error {
 	rq.queueMutex.Lock()
-	defer func() {
-		rq.queue = make([]ibc.Packet, 0)
-		rq.queueMutex.Unlock()
-	}()
+	defer rq.queueMutex.Unlock()
 
 	if len(rq.queue) > 0 {
-		rq.errGroup.Go(func() error {
-			return rq.relay(rq.queue...)
-		})
+		return rq.relay(rq.queue...)
 	}
 
-	return rq.errGroup.Wait()
+	rq.queue = make([]ibc.Packet, 0)
+
+	return nil
 }
 
 func (rq *RelayerQueue) relay(packets ...ibc.Packet) error {
 	rq.relayMutex.Lock()
-	defer rq.queueMutex.Unlock()
+	defer rq.relayMutex.Unlock()
+
+	rq.currentlyRelaying += len(packets)
 
 	ctx := context.Background()
 
@@ -94,6 +104,9 @@ func (rq *RelayerQueue) relay(packets ...ibc.Packet) error {
 	if err != nil {
 		return errors.Wrapf(err, "failed to relay packets: %v", txIDs)
 	}
+
+	rq.relaysCompleted += len(packets)
+	rq.currentlyRelaying -= len(packets)
 
 	return nil
 }

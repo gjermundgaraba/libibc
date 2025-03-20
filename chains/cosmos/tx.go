@@ -71,9 +71,9 @@ func (c *Cosmos) submitTx(ctx context.Context, wallet *Wallet, msgs ...sdk.Msg) 
 
 	txCfg := authtx.NewTxConfig(c.codec, authtx.DefaultSignModes)
 	txBuilder := txCfg.NewTxBuilder()
-	txBuilder.SetGasLimit(500000)
+	txBuilder.SetGasLimit(5000000)
 	txBuilder.SetMsgs(msgs...)
-	txBuilder.SetFeeAmount(sdk.NewCoins(sdk.NewInt64Coin("uatom", 500000)))
+	txBuilder.SetFeeAmount(sdk.NewCoins(sdk.NewInt64Coin("uatom", 5000000)))
 
 	sigV2 := signing.SignatureV2{
 		PubKey: wallet.privateKey.PubKey(),

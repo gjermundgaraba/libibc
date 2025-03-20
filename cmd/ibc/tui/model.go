@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -17,55 +16,27 @@ type Model struct {
 	viewport viewport.Model
 
 	// Status section components
-	spinner    spinner.Model
-	progress   progress.Model
-	statusText string
-	percent    int
+	spinner      spinner.Model
+	mainStatus   StatusModel
+	statusModels []StatusModel
 
 	// Channels to receive updates
-	logChan    chan string
-	statusChan chan string
-	progChan   chan int
+	logChan         chan string
+	statusModelChan chan StatusModel
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(
-		m.spinner.Tick,                      // Start the spinner animation
-		checkForContentUpdates(m.logChan),   // Check for content updates
-		checkForStatusUpdates(m.statusChan), // Check for status updates
-		checkForProgressUpdates(m.progChan), // Check for progress updates
-	)
-}
-
-// Command that checks for content updates from the goroutine
-func checkForContentUpdates(ch chan string) tea.Cmd {
-	return func() tea.Msg {
-		return contentMsg(<-ch)
+	var batch []tea.Cmd
+	batch = append(batch, m.spinner.Tick)
+	batch = append(batch, m.mainStatus.Init())
+	batch = append(batch, checkForContentUpdates(m.logChan))
+	batch = append(batch, checkForStatusModelUpdates(m.statusModelChan))
+	for _, statusModel := range m.statusModels {
+		batch = append(batch, statusModel.Init())
 	}
+
+	return tea.Batch(batch...)
 }
-
-// Command that checks for status updates from the goroutine
-func checkForStatusUpdates(ch chan string) tea.Cmd {
-	return func() tea.Msg {
-		return statusMsg(<-ch)
-	}
-}
-
-// Command that checks for progress updates from the goroutine
-func checkForProgressUpdates(ch chan int) tea.Cmd {
-	return func() tea.Msg {
-		return progressMsg(<-ch)
-	}
-}
-
-// Message containing new content to add
-type contentMsg string
-
-// Message containing new status text
-type statusMsg string
-
-// Message containing new progress percentage (1-100)
-type progressMsg int
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var (
@@ -87,26 +58,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmd = checkForContentUpdates(m.logChan)
 		cmds = append(cmds, cmd)
 
-	case statusMsg:
-		// Update the status text
-		m.statusText = string(msg)
+	case addStatusModelMsg:
+		statusModel := StatusModel(msg)
+		m.statusModels = append(m.statusModels, statusModel)
 
-		// Check for the next status update
-		cmd = checkForStatusUpdates(m.statusChan)
-		cmds = append(cmds, cmd)
-
-	case progressMsg:
-		// Update the progress percentage
-		percent := int(msg)
-		if percent >= 0 && percent <= 100 {
-			m.percent = percent
-			// Update the progress bar
-			cmd = m.progress.SetPercent(float64(percent) / 100)
-			cmds = append(cmds, cmd)
-		}
-
-		// Check for the next progress update
-		cmd = checkForProgressUpdates(m.progChan)
+		cmd = statusModel.Init()
 		cmds = append(cmds, cmd)
 
 	case spinner.TickMsg:
@@ -114,12 +70,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var spinnerCmd tea.Cmd
 		m.spinner, spinnerCmd = m.spinner.Update(msg)
 		cmds = append(cmds, spinnerCmd)
-
-	case progress.FrameMsg:
-		// Update the progress bar animation
-		progressModel, cmd := m.progress.Update(msg)
-		m.progress = progressModel.(progress.Model)
-		cmds = append(cmds, cmd)
 
 	case tea.KeyMsg:
 		if k := msg.String(); k == "ctrl+c" || k == "q" || k == "esc" {
@@ -138,14 +88,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewport.YPosition = headerHeight
 			m.viewport.SetContent(m.logs)
 
-			// Set progress bar width
-			m.progress.Width = msg.Width - 2
-
 			m.ready = true
 		} else {
 			m.viewport.Width = msg.Width
 			m.viewport.Height = msg.Height - verticalMarginHeight
-			m.progress.Width = msg.Width - 2
 		}
 	}
 
@@ -181,24 +127,18 @@ func (m Model) footerView() string {
 }
 
 func (m Model) statusView() string {
-	// Build status bar with spinner and text
-	statusBar := lipgloss.JoinHorizontal(
-		lipgloss.Center,
-		m.spinner.View(),
-		" ",
-		statusStyle.Render(m.statusText),
-	)
+	mainStatus := m.mainStatus.View()
 
-	// Add progress bar if needed
-	return fmt.Sprintf("%s\n%s",
-		statusBar,
-		m.progress.View(),
+	horizontalSeparator := strings.Repeat("─", m.viewport.Width)
+
+	var statusViews []string
+	for _, statusModel := range m.statusModels {
+		statusViews = append(statusViews, statusModel.View())
+	}
+
+	return lipgloss.JoinVertical(lipgloss.Top,
+		mainStatus,
+		horizontalSeparator,
+		strings.Join(statusViews, "\n"),
 	)
 }
-
-// func max(a, b int) int {
-// 	if a > b {
-// 		return a
-// 	}
-// 	return b
-// }

@@ -29,22 +29,6 @@ var (
 	spinnerStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("69"))
 )
 
-// tuiLogWriter implements zapcore.WriteSyncer interface to redirect logs to TUI
-type tuiLogWriter struct {
-	tui *Tui
-}
-
-// Write implements io.Writer interface
-func (w *tuiLogWriter) Write(p []byte) (n int, err error) {
-	w.tui.AddLogEntry(string(p))
-	return len(p), nil
-}
-
-// Sync implements zapcore.WriteSyncer interface
-func (w *tuiLogWriter) Sync() error {
-	return nil
-}
-
 type Tui struct {
 	Model
 
@@ -56,8 +40,8 @@ type Tui struct {
 
 func NewTui(initLog string, initStatus string) *Tui {
 	logChannel := make(chan string)
-	statusChannel := make(chan string)
-	progressChannel := make(chan int)
+	statusChan := make(chan string)
+	progressChan := make(chan int)
 
 	s := spinner.New()
 	s.Spinner = spinner.Dot
@@ -65,21 +49,30 @@ func NewTui(initLog string, initStatus string) *Tui {
 
 	p := progress.New(progress.WithScaledGradient("#FF7CCB", "#FDFF8C"))
 
-	m := Model{
-		logs:       initLog,
+	mainStatus := StatusModel{
 		spinner:    s,
 		progress:   p,
 		statusText: initStatus,
 		percent:    0,
-		logChan:    logChannel,      // Use the global channel
-		statusChan: statusChannel,   // Use the global channel
-		progChan:   progressChannel, // Use the global channel
+
+		statusChan:   statusChan,
+		progressChan: progressChan,
+	}
+
+	m := Model{
+		logs: initLog,
+
+		spinner:      s,
+		mainStatus:   mainStatus,
+		statusModels: []StatusModel{},
+
+		logChan: logChannel, // Use the global channel
 	}
 
 	tuiInstance := &Tui{
 		Model:           m,
-		statusChannel:   statusChannel,
-		progressChannel: progressChannel,
+		statusChannel:   statusChan,
+		progressChannel: progressChan,
 		logChannel:      logChannel,
 	}
 
@@ -100,14 +93,13 @@ func NewTui(initLog string, initStatus string) *Tui {
 	return tuiInstance
 }
 
-// UpdateStatus updates the status text in the TUI
-func (t *Tui) UpdateStatus(status string) {
-	t.statusChannel <- status
+func (t *Tui) AddStatusModel(status StatusModel) {
+	t.statusModelChan <- status
 }
 
-// UpdateProgress updates the progress bar with a value between 1-100
-func (t *Tui) UpdateProgress(percent int) {
-	t.progressChannel <- percent
+// UpdateStatus updates the status text in the TUI
+func (t *Tui) UpdateMainStatus(status string) {
+	t.mainStatus.UpdateStatus(status)
 }
 
 // AddLogEntry adds a new entry to the log area

@@ -38,7 +38,6 @@ func NewRootCmd() *cobra.Command {
 		distributeCmd(),
 		generateWalletCmd(),
 		balanceCmd(),
-		tuiCmd(),
 	)
 
 	return rootCmd
@@ -54,4 +53,3 @@ func createStandardLogger() (*zap.Logger, error) {
 
 	return logger, nil
 }
-

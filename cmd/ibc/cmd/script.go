@@ -28,7 +28,7 @@ func scriptCmd() *cobra.Command {
 		chainARelayerWalletId string
 
 		chainBId              string
-		chainBSideClientId    string
+		chainBClientId        string
 		chainBDenom           string
 		chainBRelayerWalletId string
 	)
@@ -73,7 +73,8 @@ func scriptCmd() *cobra.Command {
 			go func() {
 				defer func() {
 					if r := recover(); r != nil {
-						tuiInstance.UpdateStatus(fmt.Sprintf("Panic: %s", r))
+						tuiInstance.GetLogger().Error("Panic", zap.Any("panic", r))
+						tuiInstance.UpdateMainStatus("Script failed, see logs for details")
 					}
 				}()
 
@@ -87,14 +88,16 @@ func scriptCmd() *cobra.Command {
 					chainAWallets,
 					chainARelayerWallet,
 					chainB,
-					chainBSideClientId,
+					chainBClientId,
 					chainBDenom,
 					chainBWallets,
 					chainBRelayerWallet,
 					transferAmountBig,
 					numPacketsPerWallet,
 				); err != nil {
-					tuiInstance.UpdateStatus(fmt.Sprintf("Error: %s", err))
+					tuiInstance.GetLogger().Error("Script failed", zap.Error(err))
+					tuiInstance.UpdateMainStatus("Script failed, see logs for details")
+
 				}
 			}()
 
@@ -115,14 +118,14 @@ func scriptCmd() *cobra.Command {
 
 	cmd.Flags().IntVar(&numPacketsPerWallet, "packets-per-wallet", 5, "Number of packets to send per wallet")
 	cmd.Flags().IntVar(&transferAmount, "transfer-amount", 100, "Amount to transfer")
-	cmd.Flags().StringVar(&chainAId, "chain-a-id", "eureka-hub-dev-6", "Chain A ID")
-	cmd.Flags().StringVar(&chainAClientId, "chain-a-client-id", "08-wasm-2", "Chain A client ID")
-	cmd.Flags().StringVar(&chainADenom, "chain-a-denom", "uatom", "Chain A denom")
-	cmd.Flags().StringVar(&chainARelayerWalletId, "chain-a-relayer-wallet-id", "cosmos-relayer", "Chain A relayer wallet ID")
-	cmd.Flags().StringVar(&chainBId, "chain-b-id", "11155111", "Chain B ID")
-	cmd.Flags().StringVar(&chainBSideClientId, "chain-b-client-id", "plz-last-hub-devnet-69", "Chain B client ID")
-	cmd.Flags().StringVar(&chainBDenom, "chain-b-denom", "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14", "Chain B denom")
-	cmd.Flags().StringVar(&chainBRelayerWalletId, "chain-b-relayer-wallet-id", "eth-relayer", "Chain B relayer wallet ID")
+	cmd.Flags().StringVar(&chainAId, "chain-a-id", "11155111", "Chain A ID")
+	cmd.Flags().StringVar(&chainAClientId, "chain-a-client-id", "plz-last-hub-devnet-69", "Chain A client ID")
+	cmd.Flags().StringVar(&chainADenom, "chain-a-denom", "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14", "Chain A denom")
+	cmd.Flags().StringVar(&chainARelayerWalletId, "chain-a-relayer-wallet-id", "eth-relayer", "Chain A relayer wallet ID")
+	cmd.Flags().StringVar(&chainBId, "chain-b-id", "eureka-hub-dev-6", "Chain B ID")
+	cmd.Flags().StringVar(&chainBClientId, "chain-b-client-id", "08-wasm-2", "Chain B client ID")
+	cmd.Flags().StringVar(&chainBDenom, "chain-b-denom", "uatom", "Chain B denom")
+	cmd.Flags().StringVar(&chainBRelayerWalletId, "chain-b-relayer-wallet-id", "cosmos-relayer", "Chain B relayer wallet ID")
 
 	return cmd
 }
@@ -132,12 +135,12 @@ func runScript(
 	tuiInstance *tui.Tui,
 	network *network.Network,
 	chainA network.Chain,
-	chainASideClientId string,
+	chainAClientId string,
 	chainADenom string,
 	chainAWallets []network.Wallet,
 	chainARelayerWallet network.Wallet,
 	chainB network.Chain,
-	chainBSideClientId string,
+	chainBClientId string,
 	chainBDenom string,
 	chainBWallets []network.Wallet,
 	chainBRelayerWallet network.Wallet,
@@ -147,120 +150,148 @@ func runScript(
 	// Get the logger from the TUI
 	tuiLogger := tuiInstance.GetLogger()
 
-	aToBRelayerQueue := network.NewRelayerQueue(tuiLogger, chainA, chainB, chainARelayerWallet, 10)
-	bToARelayerQueue := network.NewRelayerQueue(tuiLogger, chainB, chainA, chainBRelayerWallet, 10)
-
 	tuiLogger.Info("Starting up", zap.Int("wallet-count", len(chainBWallets)))
 
-	updateMutex := sync.Mutex{}
 	var mainErrGroup errgroup.Group
 
-	var transfersCompleted uint64
-	totalTransfers := uint64(len(chainBWallets) * numPacketsPerWallet * 2)
-
-	// Eth to Cosmos transfers
-	for i := range len(chainBWallets) {
-		idx := i
-		mainErrGroup.Go(func() error {
-			ethWallet := chainBWallets[idx]
-			cosmosWallet := chainAWallets[idx]
-
-			for range numPacketsPerWallet {
-				updateMutex.Lock()
-				transfersCompleted++
-				currentTransfer := transfersCompleted
-				tuiInstance.UpdateProgress(int(currentTransfer * 100 / totalTransfers))
-				tuiInstance.UpdateStatus(fmt.Sprintf("Transferring (%d/%d)", currentTransfer, totalTransfers))
-				updateMutex.Unlock()
-
-				tuiLogger.Info("Transferring from eth to cosmos",
-					zap.Uint64("currentTransfer", currentTransfer),
-					zap.Uint64("totalTransfers", totalTransfers),
-					zap.String("from", ethWallet.Address()),
-					zap.String("from-id", ethWallet.ID()),
-					zap.String("to-id", cosmosWallet.ID()),
-					zap.String("to", cosmosWallet.Address()),
-					zap.String("amount", transferAmountBig.String()),
-				)
-				var packet ibc.Packet
-				if err := withRetry(func() error {
-					var err error
-					packet, err = chainB.SendTransfer(ctx, chainBSideClientId, ethWallet, transferAmountBig, chainBDenom, cosmosWallet.Address())
-					return err
-				}); err != nil {
-					return errors.Wrapf(err, "failed to create transfer from eth to cosmos")
-				}
-
-				aToBRelayerQueue.Add(packet)
-			}
-
-			return nil
-		})
-	}
-
-	// Cosmos to Eth transfers
-	for i := range len(chainAWallets) {
-		idx := i
-		mainErrGroup.Go(func() error {
-			ethWallet := chainBWallets[idx]
-			cosmosWallet := chainAWallets[idx]
-
-			for range numPacketsPerWallet {
-				updateMutex.Lock()
-				transfersCompleted++
-				currentTransfer := transfersCompleted
-				tuiInstance.UpdateProgress(int(currentTransfer * 100 / totalTransfers))
-				tuiInstance.UpdateStatus(fmt.Sprintf("Transferring (%d/%d)", currentTransfer, totalTransfers))
-				updateMutex.Unlock()
-
-				tuiLogger.Info("Transferring from cosmos to eth",
-					zap.Uint64("currentTransfer", currentTransfer),
-					zap.Uint64("totalTransfers", totalTransfers),
-					zap.String("from", cosmosWallet.Address()),
-					zap.String("from-id", cosmosWallet.ID()),
-					zap.String("to-id", ethWallet.ID()),
-					zap.String("to", ethWallet.Address()),
-					zap.String("amount", transferAmountBig.String()),
-				)
-				var packet ibc.Packet
-				if err := withRetry(func() error {
-					var err error
-					packet, err = chainA.SendTransfer(ctx, chainASideClientId, cosmosWallet, transferAmountBig, chainADenom, ethWallet.Address())
-					return err
-				}); err != nil {
-					return errors.Wrapf(err, "failed to send transfer from cosmos to eth")
-				}
-
-				bToARelayerQueue.Add(packet)
-			}
-
-			return nil
-		})
-	}
-
-	defer func() {
-		tuiLogger.Info("Script done (error or not)",
-			zap.Uint64("transfers-completed", transfersCompleted),
-			zap.Uint64("total-transfers", totalTransfers),
+	tuiInstance.UpdateMainStatus("Transferring...")
+	mainErrGroup.Go(func() error {
+		return transferAndRelayFromAToB(
+			ctx,
+			tuiInstance,
+			network,
+			chainA,
+			chainAClientId,
+			chainADenom,
+			chainAWallets,
+			chainB,
+			chainBWallets,
+			chainBRelayerWallet,
+			transferAmountBig,
+			numPacketsPerWallet,
 		)
-	}()
+	})
+	mainErrGroup.Go(func() error {
+		return transferAndRelayFromAToB(
+			ctx,
+			tuiInstance,
+			network,
+			chainB,
+			chainBClientId,
+			chainBDenom,
+			chainBWallets,
+			chainA,
+			chainAWallets,
+			chainARelayerWallet,
+			transferAmountBig,
+			numPacketsPerWallet,
+		)
+	})
 
 	// Wait for everything to complete
 	if err := mainErrGroup.Wait(); err != nil {
+		tuiLogger.Error("Failed to complete transfers", zap.Error(err))
+		tuiInstance.UpdateMainStatus("Failed to complete transfers")
 		return errors.Wrap(err, "failed to complete transfers")
 	}
-	// Flush relayer queues
-	mainErrGroup.Go(func() error {
-		return aToBRelayerQueue.Flush()
-	})
-	mainErrGroup.Go(func() error {
-		return bToARelayerQueue.Flush()
-	})
-	if err := mainErrGroup.Wait(); err != nil {
-		return errors.Wrap(err, "failed to flush queues")
+
+	tuiLogger.Info("All transfers and relays completed")
+	tuiInstance.UpdateMainStatus("All transfers and relays completed")
+
+	return nil
+}
+
+func transferAndRelayFromAToB(
+	ctx context.Context,
+	tuiInstance *tui.Tui,
+	network *network.Network,
+	fromChain network.Chain,
+	fromClientId string,
+	denom string,
+	fromWallets []network.Wallet,
+	toChain network.Chain,
+	toWallets []network.Wallet,
+	toChainRelayerWallet network.Wallet,
+	transferAmount *big.Int,
+	numPacketsPerWallet int,
+) error {
+	tuiLogger := tuiInstance.GetLogger()
+	relayerQueue := network.NewRelayerQueue(tuiLogger, fromChain, toChain, toChainRelayerWallet, 10)
+
+	aToBUpdateMutext := sync.Mutex{}
+
+	totalTransfer := len(toWallets) * numPacketsPerWallet
+	transferCompleted := 0
+	transferStatusModel := tui.NewStatusModel(fmt.Sprintf("Transferring from %s to %s 0/%d", fromChain.GetChainID(), toChain.GetChainID(), totalTransfer))
+	tuiInstance.AddStatusModel(transferStatusModel)
+
+	relayingStatusModel := tui.NewStatusModel(fmt.Sprintf("Relaying from %s to chain %s 0/%d", fromChain.GetChainID(), toChain.GetChainID(), totalTransfer))
+
+	errGroup := errgroup.Group{}
+
+	for i := range len(toWallets) {
+		idx := i
+		errGroup.Go(func() error {
+			chainAWallet := fromWallets[idx]
+			chainBWallet := toWallets[idx]
+
+			for range numPacketsPerWallet {
+				var packet ibc.Packet
+				if err := withRetry(func() error {
+					var err error
+					packet, err = fromChain.SendTransfer(ctx, fromClientId, chainAWallet, transferAmount, denom, chainBWallet.Address())
+					return err
+				}); err != nil {
+					return errors.Wrapf(err, "failed to create transfer from %s to chain %s", fromChain.GetChainID(), toChain.GetChainID())
+				}
+				relayerQueue.Add(packet)
+
+				aToBUpdateMutext.Lock()
+				transferCompleted++
+				transferStatusModel.UpdateStatus(fmt.Sprintf("Transferring from %s to %s (%d/%d)", fromChain.GetChainID(), toChain.GetChainID(), transferCompleted, totalTransfer))
+				transferStatusModel.UpdateProgress(int(transferCompleted * 100 / totalTransfer))
+
+				inQueue, currentlyRelaying, completedRelaying := relayerQueue.Status()
+				relayingStatusModel.UpdateStatus(fmt.Sprintf("Relaying from %s to %s %d/%d (waiting: %d)", fromChain.GetChainID(), toChain.GetChainID(), completedRelaying+currentlyRelaying, totalTransfer, inQueue))
+				relayingStatusModel.UpdateProgress(int(completedRelaying * 100 / totalTransfer))
+				aToBUpdateMutext.Unlock()
+
+				tuiLogger.Info("Transferred completed",
+					zap.String("from-chain", fromChain.GetChainID()),
+					zap.String("from-client", fromClientId),
+					zap.String("to-chain", toChain.GetChainID()),
+					zap.Int("current-a-to-b-transfer", transferCompleted),
+					zap.Int("total-a-to-b-transfer", totalTransfer),
+					zap.String("from", chainAWallet.Address()),
+					zap.String("from-id", chainAWallet.ID()),
+					zap.String("to-id", chainBWallet.ID()),
+					zap.String("to", chainBWallet.Address()),
+					zap.String("amount", transferAmount.String()),
+				)
+			}
+
+			return nil
+		})
 	}
 
-	tuiInstance.UpdateStatus("All transfers completed")
+	tuiLogger.Info("Waiting for transfers to complete")
+	transferStatusModel.UpdateStatus("Waiting for transfers to complete")
+	if err := errGroup.Wait(); err != nil {
+		tuiLogger.Error("Failed to complete transfers", zap.Error(err))
+		transferStatusModel.UpdateStatus("Failed to complete transfers")
+		return errors.Wrap(err, "failed to complete transfers")
+	}
+	tuiLogger.Info("Transfers completed")
+	transferStatusModel.UpdateStatus("Transfers completed")
+
+	inQueue, currentlyRelaying, completedRelaying := relayerQueue.Status()
+	tuiLogger.Info("Flushing queue", zap.Int("in-queue", inQueue), zap.Int("currently-relaying", currentlyRelaying), zap.Int("completed-relaying", completedRelaying))
+	relayingStatusModel.UpdateStatus(fmt.Sprintf("Flushing queue %d/%d (waiting: %d)", completedRelaying+currentlyRelaying, totalTransfer, inQueue))
+	if err := relayerQueue.Flush(); err != nil {
+		tuiLogger.Error("Failed to flush queue", zap.Error(err))
+		relayingStatusModel.UpdateStatus("Failed to flush queue")
+		return errors.Wrap(err, "failed to flush queue")
+	}
 
 	return nil
 }
