@@ -7,7 +7,6 @@ import (
 	"os"
 	"sync"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/gjermundgaraba/libibc/chains/network"
 	"github.com/gjermundgaraba/libibc/cmd/ibc/tui"
 	"github.com/gjermundgaraba/libibc/ibc"
@@ -62,9 +61,13 @@ func scriptCmd() *cobra.Command {
 			chainBWallets := chainB.GetWallets()
 			chainAWallets := chainA.GetWallets()
 
-			// TODO: REMOVE
-			chainBWallets = chainBWallets[:3]
-			chainAWallets = chainAWallets[:3]
+			// Limit wallets for testing
+			if len(chainBWallets) > 10 {
+				chainBWallets = chainBWallets[:10]
+			}
+			if len(chainAWallets) > 10 {
+				chainAWallets = chainAWallets[:10]
+			}
 
 			if len(chainBWallets) != len(chainAWallets) {
 				return errors.Errorf("wallets length mismatch: %d != %d", len(chainBWallets), len(chainAWallets))
@@ -74,7 +77,7 @@ func scriptCmd() *cobra.Command {
 				defer func() {
 					if r := recover(); r != nil {
 						tuiInstance.GetLogger().Error("Panic", zap.Any("panic", r))
-						tuiInstance.UpdateMainStatus("Script failed, see logs for details")
+						tuiInstance.UpdateMainErrorStatus(fmt.Sprintf("Panic: %v", r))
 					}
 				}()
 
@@ -96,21 +99,17 @@ func scriptCmd() *cobra.Command {
 					numPacketsPerWallet,
 				); err != nil {
 					tuiInstance.GetLogger().Error("Script failed", zap.Error(err))
-					tuiInstance.UpdateMainStatus("Script failed, see logs for details")
-
+					tuiInstance.UpdateMainErrorStatus(fmt.Sprintf("Error: %s", err.Error()))
 				}
 			}()
 
-			program := tea.NewProgram(
-				tuiInstance,
-				tea.WithAltScreen(),       // use the full size of the terminal in its "alternate screen buffer"
-				tea.WithMouseCellMotion(), // turn on mouse support so we can track the mouse wheel
-			)
-
-			if _, err := program.Run(); err != nil {
+			if err := tuiInstance.Run(); err != nil {
 				fmt.Println("Error running TUI program:", err)
 				os.Exit(1)
 			}
+
+			// Ensure resources are properly closed
+			defer tuiInstance.Close()
 
 			return nil
 		},
@@ -191,11 +190,12 @@ func runScript(
 	// Wait for everything to complete
 	if err := mainErrGroup.Wait(); err != nil {
 		tuiLogger.Error("Failed to complete transfers", zap.Error(err))
-		tuiInstance.UpdateMainStatus("Failed to complete transfers")
+		tuiInstance.UpdateMainErrorStatus(fmt.Sprintf("Failed to complete transfers: %s", err.Error()))
 		return errors.Wrap(err, "failed to complete transfers")
 	}
 
-	tuiLogger.Info("All transfers and relays completed")
+	// Log successful completion
+	tuiLogger.Info("All transfers and relays completed successfully")
 	tuiInstance.UpdateMainStatus("All transfers and relays completed")
 
 	return nil
@@ -216,7 +216,7 @@ func transferAndRelayFromAToB(
 	numPacketsPerWallet int,
 ) error {
 	tuiLogger := tuiInstance.GetLogger()
-	relayerQueue := network.NewRelayerQueue(tuiLogger, fromChain, toChain, toChainRelayerWallet, 10)
+	relayerQueue := network.NewRelayerQueue(tuiLogger, fromChain, toChain, toChainRelayerWallet, 5)
 
 	aToBUpdateMutext := sync.Mutex{}
 
@@ -226,16 +226,17 @@ func transferAndRelayFromAToB(
 	tuiInstance.AddStatusModel(transferStatusModel)
 
 	relayingStatusModel := tui.NewStatusModel(fmt.Sprintf("Relaying from %s to chain %s 0/%d", fromChain.GetChainID(), toChain.GetChainID(), totalTransfer))
+	tuiInstance.AddStatusModel(relayingStatusModel)
 
 	errGroup := errgroup.Group{}
 
-	for i := range len(toWallets) {
+	for i := 0; i < len(toWallets); i++ {
 		idx := i
 		errGroup.Go(func() error {
 			chainAWallet := fromWallets[idx]
 			chainBWallet := toWallets[idx]
 
-			for range numPacketsPerWallet {
+			for i := 0; i < numPacketsPerWallet; i++ {
 				var packet ibc.Packet
 				if err := withRetry(func() error {
 					var err error
@@ -274,24 +275,34 @@ func transferAndRelayFromAToB(
 		})
 	}
 
-	tuiLogger.Info("Waiting for transfers to complete")
-	transferStatusModel.UpdateStatus("Waiting for transfers to complete")
+	tuiLogger.Info(fmt.Sprintf("Waiting for transfers to complete from %s to %s", fromChain.GetChainID(), toChain.GetChainID()))
+	transferStatusModel.UpdateStatus(fmt.Sprintf("Waiting for transfers to complete from %s to %s", fromChain.GetChainID(), toChain.GetChainID()))
 	if err := errGroup.Wait(); err != nil {
 		tuiLogger.Error("Failed to complete transfers", zap.Error(err))
-		transferStatusModel.UpdateStatus("Failed to complete transfers")
+		transferStatusModel.UpdateErrorStatus(fmt.Sprintf("Failed: %s", err.Error()))
 		return errors.Wrap(err, "failed to complete transfers")
 	}
-	tuiLogger.Info("Transfers completed")
-	transferStatusModel.UpdateStatus("Transfers completed")
+	tuiLogger.Info(fmt.Sprintf("Transfers completed from %s to %s", fromChain.GetChainID(), toChain.GetChainID()))
+	transferStatusModel.UpdateStatus(fmt.Sprintf("Transfers completed from %s to %s", fromChain.GetChainID(), toChain.GetChainID()))
 
 	inQueue, currentlyRelaying, completedRelaying := relayerQueue.Status()
-	tuiLogger.Info("Flushing queue", zap.Int("in-queue", inQueue), zap.Int("currently-relaying", currentlyRelaying), zap.Int("completed-relaying", completedRelaying))
-	relayingStatusModel.UpdateStatus(fmt.Sprintf("Flushing queue %d/%d (waiting: %d)", completedRelaying+currentlyRelaying, totalTransfer, inQueue))
+	tuiLogger.Info("Flushing queue", zap.String("from-chain", fromChain.GetChainID()), zap.String("to-chain", toChain.GetChainID()), zap.Int("in-queue", inQueue), zap.Int("currently-relaying", currentlyRelaying), zap.Int("completed-relaying", completedRelaying))
+	relayingStatusModel.UpdateStatus(fmt.Sprintf("Flushing relay queue from %s to %s %d/%d (waiting: %d)", fromChain.GetChainID(), toChain.GetChainID(), completedRelaying+currentlyRelaying, totalTransfer, inQueue))
 	if err := relayerQueue.Flush(); err != nil {
 		tuiLogger.Error("Failed to flush queue", zap.Error(err))
-		relayingStatusModel.UpdateStatus("Failed to flush queue")
+		relayingStatusModel.UpdateErrorStatus(fmt.Sprintf("Queue flush failed: %s", err.Error()))
 		return errors.Wrap(err, "failed to flush queue")
 	}
+
+	// Log and update status for queue flush completion
+	tuiLogger.Info("Queue flushed successfully",
+		zap.String("from-chain", fromChain.GetChainID()),
+		zap.String("to-chain", toChain.GetChainID()),
+		zap.Int("completed-packets", totalTransfer))
+
+	// Update status with 100% completion
+	relayingStatusModel.UpdateStatus(fmt.Sprintf("Relay queue flushed from %s to %s %d/%d", fromChain.GetChainID(), toChain.GetChainID(), totalTransfer, totalTransfer))
+	relayingStatusModel.UpdateProgress(100)
 
 	return nil
 }

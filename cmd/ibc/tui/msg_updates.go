@@ -1,6 +1,10 @@
 package tui
 
-import tea "github.com/charmbracelet/bubbletea"
+import (
+	"time"
+	
+	tea "github.com/charmbracelet/bubbletea"
+)
 
 // Message containing new content to add
 type contentMsg string
@@ -11,32 +15,51 @@ type statusMsg string
 // Message containing new progress percentage (1-100)
 type progressMsg int
 
-type addStatusModelMsg StatusModel
+type addStatusModelMsg *StatusModel
 
-// Command that checks for content updates from the goroutine
-func checkForContentUpdates(ch chan string) tea.Cmd {
+// Command that polls all channel updates at once
+func pollAllChannels(logCh chan string, statusCh chan string, progressCh chan int, statusModelCh chan *StatusModel) tea.Cmd {
 	return func() tea.Msg {
-		return contentMsg(<-ch)
+		// Check all channels in sequence with non-blocking selects
+		
+		// Log channel
+		select {
+		case msg := <-logCh:
+			return contentMsg(msg)
+		default:
+		}
+		
+		// Status channel
+		select {
+		case msg := <-statusCh:
+			return statusMsg(msg)
+		default:
+		}
+		
+		// Progress channel
+		select {
+		case msg := <-progressCh:
+			return progressMsg(msg)
+		default:
+		}
+		
+		// Status model channel
+		select {
+		case msg := <-statusModelCh:
+			return addStatusModelMsg(msg)
+		default:
+		}
+		
+		// If no messages, return nil to continue
+		return nil
 	}
 }
 
-// Command that checks for status updates from the goroutine
-func checkForStatusUpdates(ch chan string) tea.Cmd {
-	return func() tea.Msg {
-		return statusMsg(<-ch)
-	}
-}
+// Tick function to periodically trigger updates
+type tickMsg time.Time
 
-// Command that checks for progress updates from the goroutine
-func checkForProgressUpdates(ch chan int) tea.Cmd {
-	return func() tea.Msg {
-		return progressMsg(<-ch)
-	}
-}
-
-// Command that checks for status model updates from the goroutine
-func checkForStatusModelUpdates(ch chan StatusModel) tea.Cmd {
-	return func() tea.Msg {
-		return addStatusModelMsg(<-ch)
-	}
+func tick() tea.Cmd {
+	return tea.Tick(time.Millisecond * 250, func(t time.Time) tea.Msg {
+		return tickMsg(t)
+	})
 }

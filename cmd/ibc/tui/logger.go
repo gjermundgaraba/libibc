@@ -1,8 +1,6 @@
 package tui
 
 import (
-	"os"
-
 	"go.uber.org/zap/zapcore"
 )
 
@@ -15,17 +13,15 @@ type tuiLogWriter struct {
 
 // Write implements io.Writer interface
 func (w *tuiLogWriter) Write(p []byte) (n int, err error) {
+	w.tui.mutex.Lock()
+	defer w.tui.mutex.Unlock()
+
+	// Add log entry to the TUI
 	w.tui.AddLogEntry(string(p))
 
-	// also append to file
-	file := "ibc.log"
-	f, err := os.OpenFile(file, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	// Write to the actual log file
+	_, err = w.tui.logFile.Write(p)
 	if err != nil {
-		return 0, err
-	}
-	defer f.Close()
-
-	if _, err := f.Write(p); err != nil {
 		return 0, err
 	}
 
@@ -34,5 +30,8 @@ func (w *tuiLogWriter) Write(p []byte) (n int, err error) {
 
 // Sync implements zapcore.WriteSyncer interface
 func (w *tuiLogWriter) Sync() error {
-	return nil
+	w.tui.mutex.Lock()
+	defer w.tui.mutex.Unlock()
+
+	return w.tui.logFile.Sync()
 }

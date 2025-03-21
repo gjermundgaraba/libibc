@@ -1,9 +1,12 @@
 package tui
 
 import (
-	"github.com/charmbracelet/bubbles/progress"
+	"os"
+	"sync"
+
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/lipgloss"
+	tea "github.com/charmbracelet/bubbletea"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -22,58 +25,60 @@ var (
 	}()
 
 	statusStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFFDF5")).
-			Background(lipgloss.Color("#25A065")).
-			Padding(0, 1)
+		Foreground(lipgloss.Color("#FFFDF5")).
+		Background(lipgloss.Color("#25A065")).
+		Padding(0, 1)
 
 	spinnerStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("69"))
 )
 
 type Tui struct {
-	Model
+	*Model
+	program *tea.Program
+	logFile *os.File
+	mutex   sync.Mutex
+	logger  *zap.Logger
+}
 
-	statusChannel   chan string
-	progressChannel chan int
-	logChannel      chan string
-	logger          *zap.Logger
+type logUpdate struct {
+	content string
+}
+
+type statusUpdate struct {
+	content string
+}
+
+type errorStatusUpdate struct {
+	content string
+}
+
+type progressUpdate struct {
+	percent int
+}
+
+type addStatusModelUpdate struct {
+	status *StatusModel
 }
 
 func NewTui(initLog string, initStatus string) *Tui {
-	logChannel := make(chan string)
-	statusChan := make(chan string)
-	progressChan := make(chan int)
-
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 	s.Style = spinnerStyle
 
-	p := progress.New(progress.WithScaledGradient("#FF7CCB", "#FDFF8C"))
+	mainStatus := NewStatusModel(initStatus)
 
-	mainStatus := StatusModel{
-		spinner:    s,
-		progress:   p,
-		statusText: initStatus,
-		percent:    0,
+	model := NewModel(initLog, mainStatus)
 
-		statusChan:   statusChan,
-		progressChan: progressChan,
-	}
-
-	m := Model{
-		logs: initLog,
-
-		spinner:      s,
-		mainStatus:   mainStatus,
-		statusModels: []StatusModel{},
-
-		logChan: logChannel, // Use the global channel
+	// Create an actual file for logging
+	file, err := os.OpenFile("ibc.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		panic(err)
 	}
 
 	tuiInstance := &Tui{
-		Model:           m,
-		statusChannel:   statusChan,
-		progressChannel: progressChan,
-		logChannel:      logChannel,
+		Model:   model,
+		logFile: file,
+		mutex:   sync.Mutex{},
 	}
 
 	// Create a custom zap logger that redirects to the TUI
@@ -90,24 +95,55 @@ func NewTui(initLog string, initStatus string) *Tui {
 	)
 	tuiInstance.logger = zap.New(tuiCore)
 
+	// Initialize the program here but don't run it yet
+	tuiInstance.program = tea.NewProgram(
+		tuiInstance.Model,
+		tea.WithAltScreen(),       // use the full size of the terminal in its "alternate screen buffer"
+		tea.WithMouseCellMotion(), // turn on mouse support so we can track the mouse wheel
+	)
+
 	return tuiInstance
 }
 
-func (t *Tui) AddStatusModel(status StatusModel) {
-	t.statusModelChan <- status
+// AddStatusModel adds a new status model to the UI
+func (t *Tui) AddStatusModel(status *StatusModel) {
+	t.program.Send(addStatusModelUpdate{status: status})
 }
 
-// UpdateStatus updates the status text in the TUI
+// UpdateMainStatus updates the status text in the TUI
 func (t *Tui) UpdateMainStatus(status string) {
-	t.mainStatus.UpdateStatus(status)
+	t.program.Send(statusUpdate{content: status})
+}
+
+// UpdateMainErrorStatus updates the status text in the TUI and marks it as an error
+func (t *Tui) UpdateMainErrorStatus(status string) {
+	t.program.Send(errorStatusUpdate{content: status})
+}
+
+// UpdateProgress updates the progress percentage in the TUI
+func (t *Tui) UpdateProgress(percent int) {
+	t.program.Send(progressUpdate{percent: percent})
 }
 
 // AddLogEntry adds a new entry to the log area
 func (t *Tui) AddLogEntry(entry string) {
-	t.logChannel <- entry
+	t.program.Send(logUpdate{content: entry})
 }
 
 // GetLogger returns the TUI's logger for external use
 func (t *Tui) GetLogger() *zap.Logger {
 	return t.logger
+}
+
+// Run starts the TUI program and blocks until it exits
+func (t *Tui) Run() error {
+	_, err := t.program.Run()
+	return err
+}
+
+// Close closes any resources used by the TUI
+func (t *Tui) Close() {
+	if t.logFile != nil {
+		t.logFile.Close()
+	}
 }

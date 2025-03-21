@@ -3,7 +3,6 @@ package network
 import (
 	"context"
 	"sync"
-	"time"
 
 	"github.com/gjermundgaraba/libibc/ibc"
 	"github.com/pkg/errors"
@@ -54,8 +53,11 @@ func (rq *RelayerQueue) Add(packet ibc.Packet) {
 
 	rq.queue = append(rq.queue, packet)
 	if len(rq.queue) >= rq.queueSize {
+		queueCopy := make([]ibc.Packet, len(rq.queue))
+		copy(queueCopy, rq.queue)
+
 		rq.errGroup.Go(func() error {
-			return rq.relay(rq.queue...)
+			return rq.relay(queueCopy...)
 		})
 		rq.queue = make([]ibc.Packet, 0)
 	}
@@ -75,7 +77,10 @@ func (rq *RelayerQueue) Flush() error {
 	defer rq.queueMutex.Unlock()
 
 	if len(rq.queue) > 0 {
-		return rq.relay(rq.queue...)
+		queueCopy := make([]ibc.Packet, len(rq.queue))
+		copy(queueCopy, rq.queue)
+
+		return rq.relay(queueCopy...)
 	}
 
 	rq.queue = make([]ibc.Packet, 0)
@@ -97,13 +102,14 @@ func (rq *RelayerQueue) relay(packets ...ibc.Packet) error {
 	}
 	destClient := packets[0].DestinationClient
 
-	rq.logger.Info("relaying packets", zap.Strings("tx_ids", txIDs), zap.String("source_chain", rq.sourceChain.GetChainID()), zap.String("destination_chain", rq.destinationChain.GetChainID()), zap.String("destination_client", destClient), zap.Any("relayer_wallet", rq.relayerWallet))
-	time.Sleep(30 * time.Second)
+	rq.logger.Info("Relaying packets", zap.Strings("tx_ids", txIDs), zap.String("source_chain", rq.sourceChain.GetChainID()), zap.String("destination_chain", rq.destinationChain.GetChainID()), zap.String("destination_client", destClient), zap.Any("relayer-wallet", rq.relayerWallet.Address()))
 
 	_, err := rq.relayer.Relay(ctx, rq.sourceChain, rq.destinationChain, destClient, rq.relayerWallet, txIDs)
 	if err != nil {
 		return errors.Wrapf(err, "failed to relay packets: %v", txIDs)
 	}
+
+	rq.logger.Info("Finished relaying packets", zap.Strings("tx_ids", txIDs), zap.String("source_chain", rq.sourceChain.GetChainID()), zap.String("destination_chain", rq.destinationChain.GetChainID()), zap.String("destination_client", destClient), zap.Any("relayer-address", rq.relayerWallet.Address()))
 
 	rq.relaysCompleted += len(packets)
 	rq.currentlyRelaying -= len(packets)
