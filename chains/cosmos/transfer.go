@@ -60,7 +60,7 @@ func (c *Cosmos) SendTransfer(
 		Signer: wallet.Address(),
 	}
 
-	resp, err := c.submitTx(ctx, cosmosWallet, &msgSendPacket)
+	resp, err := c.submitTx(ctx, cosmosWallet, 200_000, &msgSendPacket)
 	if err != nil {
 		return ibc.Packet{}, errors.Wrap(err, "failed to submit tx")
 	}

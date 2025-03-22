@@ -10,19 +10,30 @@ import (
 type Packet struct {
 	TxHash            string
 	IBCVersion        uint
+	Sequence          uint64
 	SourceClient      string
 	DestinationClient string
-	Sequence          uint64
+	TimeoutTimestamp  uint64
 
 	PacketRaw any
 }
 
-func NewPacket(txHash string, ibcVersion uint, sourceClient, destinationClient string, data any) Packet {
+func NewPacket(
+	txHash string,
+	ibcVersion uint,
+	sequence uint64,
+	sourceClient,
+	destinationClient string,
+	timeoutTimestamp uint64,
+	data any,
+) Packet {
 	return Packet{
 		TxHash:            txHash,
 		IBCVersion:        ibcVersion,
+		Sequence:          sequence,
 		SourceClient:      sourceClient,
 		DestinationClient: destinationClient,
+		TimeoutTimestamp:  timeoutTimestamp,
 		PacketRaw:         data,
 	}
 }

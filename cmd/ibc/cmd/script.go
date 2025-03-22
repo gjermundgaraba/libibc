@@ -10,6 +10,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 )
 
 func scriptCmd() *cobra.Command {
@@ -34,6 +35,7 @@ func scriptCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			tuiInstance := tui.NewTui("Starting script", "Initializing")
+			tuiLogger := tuiInstance.GetLogger()
 
 			network, err := cfg.ToNetwork(ctx, tuiInstance.GetLogger())
 			if err != nil {
@@ -58,11 +60,11 @@ func scriptCmd() *cobra.Command {
 			chainAWallets := chainA.GetWallets()
 
 			// Limit wallets for testing
-			if len(chainBWallets) > 10 {
-				chainBWallets = chainBWallets[:10]
+			if len(chainBWallets) > 5 {
+				chainBWallets = chainBWallets[:5]
 			}
-			if len(chainAWallets) > 10 {
-				chainAWallets = chainAWallets[:10]
+			if len(chainAWallets) > 5 {
+				chainAWallets = chainAWallets[:5]
 			}
 
 			if len(chainBWallets) != len(chainAWallets) {
@@ -72,31 +74,59 @@ func scriptCmd() *cobra.Command {
 			go func() {
 				defer func() {
 					if r := recover(); r != nil {
-						tuiInstance.GetLogger().Error("Panic", zap.Any("panic", r))
+						tuiLogger.Error("Panic", zap.Any("panic", r))
 						tuiInstance.UpdateMainErrorStatus(fmt.Sprintf("Panic: %v", r))
 					}
 				}()
 
-				if err := loadscript.RunScript(
-					ctx,
-					tuiInstance,
-					network,
-					chainA,
-					chainAClientId,
-					chainADenom,
-					chainAWallets,
-					chainARelayerWallet,
-					chainB,
-					chainBClientId,
-					chainBDenom,
-					chainBWallets,
-					chainBRelayerWallet,
-					transferAmountBig,
-					numPacketsPerWallet,
-				); err != nil {
-					tuiInstance.GetLogger().Error("Script failed", zap.Error(err))
-					tuiInstance.UpdateMainErrorStatus(fmt.Sprintf("Error: %s", err.Error()))
+				tuiLogger.Info("Starting up", zap.Int("wallet-count", len(chainBWallets)))
+
+				var mainErrGroup errgroup.Group
+
+				tuiInstance.UpdateMainStatus("Transferring...")
+				mainErrGroup.Go(func() error {
+					return loadscript.TransferAndRelayFromAToB(
+						ctx,
+						tuiInstance,
+						network,
+						chainA,
+						chainAClientId,
+						chainADenom,
+						chainAWallets,
+						chainB,
+						chainBWallets,
+						chainBRelayerWallet,
+						transferAmountBig,
+						numPacketsPerWallet,
+					)
+				})
+				mainErrGroup.Go(func() error {
+					return loadscript.TransferAndRelayFromAToB(
+						ctx,
+						tuiInstance,
+						network,
+						chainB,
+						chainBClientId,
+						chainBDenom,
+						chainBWallets,
+						chainA,
+						chainAWallets,
+						chainARelayerWallet,
+						transferAmountBig,
+						numPacketsPerWallet,
+					)
+				})
+
+				// Wait for everything to complete
+				if err := mainErrGroup.Wait(); err != nil {
+					tuiLogger.Error("Failed to complete transfers", zap.Error(err))
+					tuiInstance.UpdateMainErrorStatus(fmt.Sprintf("Failed to complete transfers: %s", err.Error()))
 				}
+
+				// Log successful completion
+				tuiLogger.Info("All transfers and relays completed successfully")
+				tuiInstance.UpdateMainStatus("All transfers and relays completed")
+
 			}()
 
 			if err := tuiInstance.Run(); err != nil {
@@ -114,11 +144,11 @@ func scriptCmd() *cobra.Command {
 	cmd.Flags().IntVar(&numPacketsPerWallet, "packets-per-wallet", 5, "Number of packets to send per wallet")
 	cmd.Flags().IntVar(&transferAmount, "transfer-amount", 100, "Amount to transfer")
 	cmd.Flags().StringVar(&chainAId, "chain-a-id", "11155111", "Chain A ID")
-	cmd.Flags().StringVar(&chainAClientId, "chain-a-client-id", "plz-last-hub-devnet-69", "Chain A client ID")
+	cmd.Flags().StringVar(&chainAClientId, "chain-a-client-id", "hub-testnet-0", "Chain A client ID")
 	cmd.Flags().StringVar(&chainADenom, "chain-a-denom", "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14", "Chain A denom")
 	cmd.Flags().StringVar(&chainARelayerWalletId, "chain-a-relayer-wallet-id", "eth-relayer", "Chain A relayer wallet ID")
-	cmd.Flags().StringVar(&chainBId, "chain-b-id", "eureka-hub-dev-6", "Chain B ID")
-	cmd.Flags().StringVar(&chainBClientId, "chain-b-client-id", "08-wasm-2", "Chain B client ID")
+	cmd.Flags().StringVar(&chainBId, "chain-b-id", "provider", "Chain B ID")
+	cmd.Flags().StringVar(&chainBClientId, "chain-b-client-id", "08-wasm-262", "Chain B client ID")
 	cmd.Flags().StringVar(&chainBDenom, "chain-b-denom", "uatom", "Chain B denom")
 	cmd.Flags().StringVar(&chainBRelayerWalletId, "chain-b-relayer-wallet-id", "cosmos-relayer", "Chain B relayer wallet ID")
 

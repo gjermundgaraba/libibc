@@ -103,7 +103,7 @@ func distributeCmd() *cobra.Command {
 				}
 
 				// Just to give it time to land
-				time.Sleep(8 * time.Second)
+				time.Sleep(12 * time.Second)
 
 				logger.Info("Sent tokens",
 					zap.String("from", senderWalletID),

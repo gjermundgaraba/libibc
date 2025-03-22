@@ -34,6 +34,7 @@ type Chain interface {
 	GetClients() map[string]ClientCounterparty
 
 	GetPackets(ctx context.Context, txHash string) ([]ibc.Packet, error)
+	IsPacketReceived(ctx context.Context, packet ibc.Packet) (bool, error)
 
 	SubmitRelayTx(ctx context.Context, txBz []byte, wallet Wallet) (string, error)
 	SendTransfer(ctx context.Context, clientID string, wallet Wallet, amount *big.Int, denom string, to string) (ibc.Packet, error)

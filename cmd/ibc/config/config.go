@@ -31,7 +31,8 @@ type ChainConfig struct {
 	WalletIDs []string       `toml:"wallet-ids"`
 
 	// Ethereum specific fields
-	ICS26Address string `toml:"ics26-address"`
+	ICS26Address         string `toml:"ics26-address"`
+	RelayerHelperAddress string `toml:"relayer-helper-address"`
 }
 
 // ClientConfig represents the configuration for a client
@@ -124,7 +125,7 @@ func (c *Config) ToNetwork(ctx context.Context, logger *zap.Logger) (*network.Ne
 				return nil, errors.Wrap(err, "failed to create Cosmos chain")
 			}
 		case "ethereum":
-			chain, err = ethereum.NewEthereum(ctx, logger, chainConfig.ChainID, chainConfig.RPCAddr, chainConfig.ICS26Address)
+			chain, err = ethereum.NewEthereum(ctx, logger, chainConfig.ChainID, chainConfig.RPCAddr, chainConfig.ICS26Address, chainConfig.RelayerHelperAddress)
 			if err != nil {
 				return nil, errors.Wrap(err, "failed to create Ethereum chain")
 			}

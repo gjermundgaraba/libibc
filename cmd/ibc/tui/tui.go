@@ -5,8 +5,8 @@ import (
 	"sync"
 
 	"github.com/charmbracelet/bubbles/spinner"
-	"github.com/charmbracelet/lipgloss"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -25,9 +25,9 @@ var (
 	}()
 
 	statusStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#FFFDF5")).
-		Background(lipgloss.Color("#25A065")).
-		Padding(0, 1)
+			Foreground(lipgloss.Color("#FFFDF5")).
+			Background(lipgloss.Color("#25A065")).
+			Padding(0, 1)
 
 	spinnerStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("69"))
 )
@@ -91,7 +91,7 @@ func NewTui(initLog string, initStatus string) *Tui {
 	tuiCore := zapcore.NewCore(
 		zapcore.NewConsoleEncoder(encoderConfig),
 		zapcore.AddSync(&tuiLogWriter{tui: tuiInstance}),
-		zap.InfoLevel,
+		zap.DebugLevel,
 	)
 	tuiInstance.logger = zap.New(tuiCore)
 
@@ -147,3 +147,4 @@ func (t *Tui) Close() {
 		t.logFile.Close()
 	}
 }
+

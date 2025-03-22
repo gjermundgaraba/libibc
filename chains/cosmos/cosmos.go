@@ -8,7 +8,6 @@ import (
 	txtypes "github.com/cosmos/cosmos-sdk/types/tx"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	"github.com/gjermundgaraba/libibc/chains/network"
-	"github.com/gjermundgaraba/libibc/ibc"
 	"github.com/gjermundgaraba/libibc/utils"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
@@ -51,16 +50,6 @@ func (c *Cosmos) AddClient(clientID string, counterparty network.ClientCounterpa
 // GetClients implements network.Chain.
 func (c *Cosmos) GetClients() map[string]network.ClientCounterparty {
 	return c.Clients
-}
-
-func (c *Cosmos) GetPackets(ctx context.Context, txHash string) ([]ibc.Packet, error) {
-	txResp, err := c.QueryTx(ctx, txHash)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to query transaction %s", txHash)
-	}
-
-	events := txResp.TxResponse.Events
-	return ParsePackets(txHash, events)
 }
 
 func (c *Cosmos) QueryTx(ctx context.Context, txHash string) (*txtypes.GetTxResponse, error) {

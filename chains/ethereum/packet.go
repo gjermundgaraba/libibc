@@ -5,6 +5,7 @@ import (
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v10/modules/core/04-channel/v2/types"
 	"github.com/cosmos/solidity-ibc-eureka/abigen/ics26router"
+	"github.com/cosmos/solidity-ibc-eureka/abigen/relayerhelper"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/gjermundgaraba/libibc/ibc"
@@ -55,7 +56,41 @@ func (e *Ethereum) GetPackets(ctx context.Context, txHash string) ([]ibc.Packet,
 		Payloads:          payloads,
 	}
 
-	packet := ibc.NewPacket(txHash, 2, sendPacketEvent.Packet.SourceClient, sendPacketEvent.Packet.DestClient, packetData)
+	packet := ibc.NewPacket(
+		txHash,
+		2,
+		packetData.Sequence,
+		sendPacketEvent.Packet.SourceClient,
+		sendPacketEvent.Packet.DestClient,
+		packetData.TimeoutTimestamp,
+		packetData,
+	)
 
 	return []ibc.Packet{packet}, nil
+}
+
+// HasPacketReceipt implements network.Chain.
+func (e *Ethereum) IsPacketReceived(ctx context.Context, packet ibc.Packet) (bool, error) {
+	ethClient, err := ethclient.Dial(e.ethRPC)
+	if err != nil {
+		return false, errors.Wrap(err, "failed to dial ethereum client")
+	}
+
+	relayerHelper, err := relayerhelper.NewContract(e.relayerHelperAddress, ethClient)
+	if err != nil {
+		return false, errors.Wrap(err, "failed to get relayer helper contract")
+	}
+
+	isReceived, err := relayerHelper.IsPacketReceived(nil, relayerhelper.IICS26RouterMsgsPacket{
+		Sequence:         packet.Sequence,
+		SourceClient:     packet.SourceClient,
+		DestClient:       packet.DestinationClient,
+		TimeoutTimestamp: packet.TimeoutTimestamp,
+		Payloads:         []relayerhelper.IICS26RouterMsgsPayload{},
+	})
+	if err != nil {
+		return false, errors.Wrap(err, "failed to query packet receipt")
+	}
+
+	return isReceived, nil
 }

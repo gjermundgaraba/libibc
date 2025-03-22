@@ -14,79 +14,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-func RunScript(
-	ctx context.Context,
-	tuiInstance *tui.Tui,
-	network *network.Network,
-	chainA network.Chain,
-	chainAClientId string,
-	chainADenom string,
-	chainAWallets []network.Wallet,
-	chainARelayerWallet network.Wallet,
-	chainB network.Chain,
-	chainBClientId string,
-	chainBDenom string,
-	chainBWallets []network.Wallet,
-	chainBRelayerWallet network.Wallet,
-	transferAmountBig *big.Int,
-	numPacketsPerWallet int,
-) error {
-	// Get the logger from the TUI
-	tuiLogger := tuiInstance.GetLogger()
-
-	tuiLogger.Info("Starting up", zap.Int("wallet-count", len(chainBWallets)))
-
-	var mainErrGroup errgroup.Group
-
-	tuiInstance.UpdateMainStatus("Transferring...")
-	mainErrGroup.Go(func() error {
-		return transferAndRelayFromAToB(
-			ctx,
-			tuiInstance,
-			network,
-			chainA,
-			chainAClientId,
-			chainADenom,
-			chainAWallets,
-			chainB,
-			chainBWallets,
-			chainBRelayerWallet,
-			transferAmountBig,
-			numPacketsPerWallet,
-		)
-	})
-	mainErrGroup.Go(func() error {
-		return transferAndRelayFromAToB(
-			ctx,
-			tuiInstance,
-			network,
-			chainB,
-			chainBClientId,
-			chainBDenom,
-			chainBWallets,
-			chainA,
-			chainAWallets,
-			chainARelayerWallet,
-			transferAmountBig,
-			numPacketsPerWallet,
-		)
-	})
-
-	// Wait for everything to complete
-	if err := mainErrGroup.Wait(); err != nil {
-		tuiLogger.Error("Failed to complete transfers", zap.Error(err))
-		tuiInstance.UpdateMainErrorStatus(fmt.Sprintf("Failed to complete transfers: %s", err.Error()))
-		return errors.Wrap(err, "failed to complete transfers")
-	}
-
-	// Log successful completion
-	tuiLogger.Info("All transfers and relays completed successfully")
-	tuiInstance.UpdateMainStatus("All transfers and relays completed")
-
-	return nil
-}
-
-func transferAndRelayFromAToB(
+func TransferAndRelayFromAToB(
 	ctx context.Context,
 	tuiInstance *tui.Tui,
 	network *network.Network,
@@ -101,7 +29,7 @@ func transferAndRelayFromAToB(
 	numPacketsPerWallet int,
 ) error {
 	tuiLogger := tuiInstance.GetLogger()
-	relayerQueue := network.NewRelayerQueue(tuiLogger, fromChain, toChain, toChainRelayerWallet, 5)
+	relayerQueue := network.NewRelayerQueue(tuiLogger, fromChain, toChain, toChainRelayerWallet, 10, false)
 
 	aToBUpdateMutext := sync.Mutex{}
 

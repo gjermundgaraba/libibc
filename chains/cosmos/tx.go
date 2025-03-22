@@ -48,7 +48,7 @@ func (c *Cosmos) SubmitRelayTx(ctx context.Context, txBz []byte, wallet network.
 		msgs = append(msgs, sdkMsg)
 	}
 
-	grpcRes, err := c.submitTx(ctx, cosmosWallet, msgs...)
+	grpcRes, err := c.submitTx(ctx, cosmosWallet, 5_000_000, msgs...)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to submit tx")
 	}
@@ -56,7 +56,7 @@ func (c *Cosmos) SubmitRelayTx(ctx context.Context, txBz []byte, wallet network.
 	return grpcRes.TxResponse.TxHash, nil
 }
 
-func (c *Cosmos) submitTx(ctx context.Context, wallet *Wallet, msgs ...sdk.Msg) (*txtypes.BroadcastTxResponse, error) {
+func (c *Cosmos) submitTx(ctx context.Context, wallet *Wallet, gas uint64, msgs ...sdk.Msg) (*txtypes.BroadcastTxResponse, error) {
 	grpcConn, err := utils.GetGRPC(c.grpcAddr)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get grpc connection")
@@ -71,9 +71,9 @@ func (c *Cosmos) submitTx(ctx context.Context, wallet *Wallet, msgs ...sdk.Msg) 
 
 	txCfg := authtx.NewTxConfig(c.codec, authtx.DefaultSignModes)
 	txBuilder := txCfg.NewTxBuilder()
-	txBuilder.SetGasLimit(5000000)
+	txBuilder.SetGasLimit(gas)
 	txBuilder.SetMsgs(msgs...)
-	txBuilder.SetFeeAmount(sdk.NewCoins(sdk.NewInt64Coin("uatom", 5000000)))
+	txBuilder.SetFeeAmount(sdk.NewCoins(sdk.NewInt64Coin("uatom", int64(gas))))
 
 	sigV2 := signing.SignatureV2{
 		PubKey: wallet.privateKey.PubKey(),

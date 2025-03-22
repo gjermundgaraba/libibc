@@ -20,14 +20,15 @@ type Ethereum struct {
 	Clients map[string]network.ClientCounterparty
 	Wallets map[string]Wallet
 
-	actualChainID *big.Int
-	ethRPC        string
-	ics26Address  ethcommon.Address
-	ics20Address  ethcommon.Address
-	logger        *zap.Logger
+	actualChainID        *big.Int
+	ethRPC               string
+	ics26Address         ethcommon.Address
+	ics20Address         ethcommon.Address
+	relayerHelperAddress ethcommon.Address
+	logger               *zap.Logger
 }
 
-func NewEthereum(ctx context.Context, logger *zap.Logger, chainID string, ethRPC string, ics26AddressHex string) (*Ethereum, error) {
+func NewEthereum(ctx context.Context, logger *zap.Logger, chainID string, ethRPC string, ics26AddressHex string, relayerHelperAddressHex string) (*Ethereum, error) {
 	ethClient, err := ethclient.Dial(ethRPC)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to dial ethereum client")
@@ -44,6 +45,8 @@ func NewEthereum(ctx context.Context, logger *zap.Logger, chainID string, ethRPC
 		return nil, errors.Wrap(err, "failed to get ics26 router contract")
 	}
 
+	relayerHelperAddress := ethcommon.HexToAddress(relayerHelperAddressHex)
+
 	ics20Address, err := router.GetIBCApp(nil, "transfer")
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get ics20 address")
@@ -54,11 +57,12 @@ func NewEthereum(ctx context.Context, logger *zap.Logger, chainID string, ethRPC
 		Clients: make(map[string]network.ClientCounterparty),
 		Wallets: make(map[string]Wallet),
 
-		actualChainID: ethChainID,
-		ethRPC:        ethRPC,
-		ics26Address:  ics26Address,
-		ics20Address:  ics20Address,
-		logger:        logger,
+		actualChainID:        ethChainID,
+		ethRPC:               ethRPC,
+		ics26Address:         ics26Address,
+		ics20Address:         ics20Address,
+		relayerHelperAddress: relayerHelperAddress,
+		logger:               logger,
 	}, nil
 }
 

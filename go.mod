@@ -5,8 +5,8 @@ go 1.23.6
 toolchain go1.23.7
 
 require (
+	cosmossdk.io/errors v1.0.1
 	cosmossdk.io/math v1.4.0
-	github.com/briandowns/spinner v1.23.2
 	github.com/charmbracelet/bubbles v0.20.0
 	github.com/charmbracelet/bubbletea v1.3.4
 	github.com/charmbracelet/lipgloss v1.0.0
@@ -15,7 +15,7 @@ require (
 	github.com/cosmos/gogoproto v1.7.0
 	github.com/cosmos/ibc-go/modules/light-clients/08-wasm/v10 v10.1.0
 	github.com/cosmos/ibc-go/v10 v10.1.0
-	github.com/cosmos/solidity-ibc-eureka/abigen v0.0.0-20250314200004-a284ab05e7ca
+	github.com/cosmos/solidity-ibc-eureka/abigen v0.0.0-20250321232502-d318fcba0982
 	github.com/ethereum/go-ethereum v1.15.5
 	github.com/pelletier/go-toml v1.9.5
 	github.com/pkg/errors v0.9.1
@@ -32,7 +32,6 @@ require (
 	cosmossdk.io/collections v0.4.0 // indirect
 	cosmossdk.io/core v0.11.1 // indirect
 	cosmossdk.io/depinject v1.1.0 // indirect
-	cosmossdk.io/errors v1.0.1 // indirect
 	cosmossdk.io/log v1.4.1 // indirect
 	cosmossdk.io/store v1.1.1 // indirect
 	cosmossdk.io/x/tx v0.13.7 // indirect

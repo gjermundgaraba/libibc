@@ -3,6 +3,7 @@ package network
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/gjermundgaraba/libibc/ibc"
 	"github.com/pkg/errors"
@@ -14,6 +15,7 @@ type RelayerQueue struct {
 	logger *zap.Logger
 
 	relayer          Relayer
+	selfRelay        bool
 	relayMutex       sync.RWMutex
 	relayerWallet    Wallet
 	sourceChain      Chain
@@ -29,11 +31,12 @@ type RelayerQueue struct {
 	errGroup *errgroup.Group
 }
 
-func (n *Network) NewRelayerQueue(logger *zap.Logger, sourceChain Chain, destinationChain Chain, relayerWallet Wallet, queueSize int) *RelayerQueue {
+func (n *Network) NewRelayerQueue(logger *zap.Logger, sourceChain Chain, destinationChain Chain, relayerWallet Wallet, queueSize int, selfRelay bool) *RelayerQueue {
 	return &RelayerQueue{
 		logger: logger,
 
 		relayer:          n.Relayer,
+		selfRelay:        selfRelay,
 		relayMutex:       sync.RWMutex{},
 		relayerWallet:    relayerWallet,
 		sourceChain:      sourceChain,
@@ -96,20 +99,59 @@ func (rq *RelayerQueue) relay(packets ...ibc.Packet) error {
 
 	ctx := context.Background()
 
-	txIDs := make([]string, len(packets))
-	for i, packet := range packets {
-		txIDs[i] = packet.TxHash
+	if rq.selfRelay {
+		txIDs := make([]string, len(packets))
+		for i, packet := range packets {
+			txIDs[i] = packet.TxHash
+		}
+		destClient := packets[0].DestinationClient
+
+		rq.logger.Info("Relaying packets", zap.Strings("tx_ids", txIDs), zap.String("source_chain", rq.sourceChain.GetChainID()), zap.String("destination_chain", rq.destinationChain.GetChainID()), zap.String("destination_client", destClient), zap.Any("relayer-wallet", rq.relayerWallet.Address()))
+
+		_, err := rq.relayer.Relay(ctx, rq.sourceChain, rq.destinationChain, destClient, rq.relayerWallet, txIDs)
+		if err != nil {
+			return errors.Wrapf(err, "failed to relay packets: %v", txIDs)
+		}
+
+		rq.logger.Info("Finished relaying packets", zap.Strings("tx_ids", txIDs), zap.String("source_chain", rq.sourceChain.GetChainID()), zap.String("destination_chain", rq.destinationChain.GetChainID()), zap.String("destination_client", destClient), zap.Any("relayer-address", rq.relayerWallet.Address()))
+	} else {
+		// Just wait for packet receipts
+		waitingPackets := make([]ibc.Packet, len(packets))
+		copy(waitingPackets, packets)
+
+		maxWait := 120 * time.Minute
+		waitStart := time.Now()
+		numAttempts := 0
+
+		for len(waitingPackets) > 0 && time.Since(waitStart) < maxWait {
+			if numAttempts%10 == 0 {
+				rq.logger.Info("Waiting for packet receipts", zap.Int("num_packets", len(waitingPackets)), zap.Duration("elapsed", time.Since(waitStart)))
+			}
+
+			var remainingPackets []ibc.Packet
+			for _, packet := range packets {
+				hasPacketReceipt, err := rq.destinationChain.IsPacketReceived(ctx, packet)
+				if err != nil {
+					rq.logger.Debug("Failed to check packet receipt", zap.String("tx_hash", packet.TxHash), zap.Error(err))
+
+					hasPacketReceipt = false
+				}
+
+				if !hasPacketReceipt {
+					remainingPackets = append(remainingPackets, packet)
+				}
+			}
+
+			time.Sleep(5 * time.Second)
+
+			waitingPackets = remainingPackets
+			numAttempts++
+		}
+
+		if len(waitingPackets) > 0 {
+			return errors.Errorf("failed to relay packets: %v", waitingPackets)
+		}
 	}
-	destClient := packets[0].DestinationClient
-
-	rq.logger.Info("Relaying packets", zap.Strings("tx_ids", txIDs), zap.String("source_chain", rq.sourceChain.GetChainID()), zap.String("destination_chain", rq.destinationChain.GetChainID()), zap.String("destination_client", destClient), zap.Any("relayer-wallet", rq.relayerWallet.Address()))
-
-	_, err := rq.relayer.Relay(ctx, rq.sourceChain, rq.destinationChain, destClient, rq.relayerWallet, txIDs)
-	if err != nil {
-		return errors.Wrapf(err, "failed to relay packets: %v", txIDs)
-	}
-
-	rq.logger.Info("Finished relaying packets", zap.Strings("tx_ids", txIDs), zap.String("source_chain", rq.sourceChain.GetChainID()), zap.String("destination_chain", rq.destinationChain.GetChainID()), zap.String("destination_client", destClient), zap.Any("relayer-address", rq.relayerWallet.Address()))
 
 	rq.relaysCompleted += len(packets)
 	rq.currentlyRelaying -= len(packets)

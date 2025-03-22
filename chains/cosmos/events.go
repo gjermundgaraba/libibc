@@ -28,7 +28,15 @@ func ParsePackets(txHash string, events []abci.Event) ([]ibc.Packet, error) {
 
 		var packets []ibc.Packet
 		for _, packet := range v1Packets {
-			packets = append(packets, ibc.NewPacket(txHash, 1, packet.SourcePort, packet.DestinationPort, packet))
+			packets = append(packets, ibc.NewPacket(
+				txHash,
+				1,
+				packet.Sequence,
+				packet.SourcePort,
+				packet.DestinationPort,
+				packet.TimeoutTimestamp,
+				packet,
+			))
 		}
 		return packets, nil
 	case 2:
@@ -39,7 +47,15 @@ func ParsePackets(txHash string, events []abci.Event) ([]ibc.Packet, error) {
 
 		var packets []ibc.Packet
 		for _, packet := range v2Packets {
-			packets = append(packets, ibc.NewPacket(txHash, 2, packet.SourceClient, packet.DestinationClient, packet))
+			packets = append(packets, ibc.NewPacket(
+				txHash,
+				2,
+				packet.Sequence,
+				packet.SourceClient,
+				packet.DestinationClient,
+				packet.TimeoutTimestamp,
+				packet,
+			))
 		}
 		return packets, nil
 	default:
