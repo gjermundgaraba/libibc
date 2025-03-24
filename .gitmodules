@@ -1,0 +1,4 @@
+[submodule "chains/ethereum/solidity/solidity-ibc-eureka"]
+	path = chains/ethereum/solidity/solidity-ibc-eureka
+	url = https://github.com/cosmos/solidity-ibc-eureka
+	shallow = true
