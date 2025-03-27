@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/gjermundgaraba/libibc/ibc"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 )
 
 // GetPackets implements network.Chain.
@@ -81,16 +82,11 @@ func (e *Ethereum) IsPacketReceived(ctx context.Context, packet ibc.Packet) (boo
 		return false, errors.Wrap(err, "failed to get relayer helper contract")
 	}
 
-	isReceived, err := relayerHelper.IsPacketReceived(nil, relayerhelper.IICS26RouterMsgsPacket{
-		Sequence:         packet.Sequence,
-		SourceClient:     packet.SourceClient,
-		DestClient:       packet.DestinationClient,
-		TimeoutTimestamp: packet.TimeoutTimestamp,
-		Payloads:         []relayerhelper.IICS26RouterMsgsPayload{},
-	})
+	receipt, err := relayerHelper.QueryPacketReceipt(nil, packet.DestinationClient, packet.Sequence)
 	if err != nil {
 		return false, errors.Wrap(err, "failed to query packet receipt")
 	}
+	e.logger.Debug("Querying packet receipt", zap.String("dest_client", packet.DestinationClient), zap.Uint64("sequence", packet.Sequence), zap.Binary("receipt", receipt[:]))
 
-	return isReceived, nil
+	return receipt != [32]byte{}, nil
 }

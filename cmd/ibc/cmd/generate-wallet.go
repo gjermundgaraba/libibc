@@ -20,10 +20,6 @@ func generateWalletCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			logger, err := createStandardLogger()
-			if err != nil {
-				return errors.Wrap(err, "failed to create logger")
-			}
 			chainID := args[0]
 			newWalletID := args[1]
 
@@ -45,9 +41,9 @@ func generateWalletCmd() *cobra.Command {
 				return errors.Wrap(err, "failed to build network")
 			}
 
-			chain := network.GetChain(chainID)
-			if chain == nil {
-				return errors.Errorf("chain not found: %s", chainID)
+			chain, err := network.GetChain(chainID)
+			if err != nil {
+				return errors.Wrapf(err, "failed to get chain %s", chainID)
 			}
 
 			if _, err := chain.GetWallet(newWalletID); err == nil {
@@ -89,7 +85,7 @@ func generateWalletCmd() *cobra.Command {
 				})
 			}
 
-			if err := cfg.SaveConfig(cfgFile); err != nil {
+			if err := cfg.SaveConfig(configPath); err != nil {
 				return errors.Wrap(err, "failed to save config")
 			}
 
@@ -120,7 +116,7 @@ func generateWalletCmd() *cobra.Command {
 			logger.Info("Wallet generation completed successfully",
 				zap.String("wallet_id", newWalletID),
 				zap.String("chain_id", chainID),
-				zap.String("config_file", cfgFile))
+				zap.String("config_file", configPath))
 
 			return nil
 		},

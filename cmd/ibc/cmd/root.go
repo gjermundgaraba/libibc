@@ -4,15 +4,18 @@ import (
 	"fmt"
 
 	"github.com/gjermundgaraba/libibc/cmd/ibc/config"
-	"github.com/pkg/errors"
+	"github.com/gjermundgaraba/libibc/cmd/ibc/logging"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 )
 
 var (
-	cfgFile string
-	cfg     *config.Config
+	configPath string
+	cfg        *config.Config
+	logLevel   string
+
+	logger    *zap.Logger
+	logWriter *logging.IBCLogWriter
 )
 
 func NewRootCmd() *cobra.Command {
@@ -21,15 +24,18 @@ func NewRootCmd() *cobra.Command {
 		Short: "IBC CLI tool",
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			var err error
-			cfg, err = config.LoadConfig(cfgFile)
+			cfg, err = config.LoadConfig(configPath)
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
+
+			logger, logWriter = logging.NewIBCLogger(logLevel)
 			return nil
 		},
 	}
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "config.toml", "config file path")
+	rootCmd.PersistentFlags().StringVar(&configPath, "config", "config.toml", "config file path")
+	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info", "log level (debug, info, warn, error)")
 
 	rootCmd.AddCommand(
 		traceCmd(),
@@ -38,18 +44,8 @@ func NewRootCmd() *cobra.Command {
 		distributeCmd(),
 		generateWalletCmd(),
 		balanceCmd(),
+		transferCmd(),
 	)
 
 	return rootCmd
-}
-
-func createStandardLogger() (*zap.Logger, error) {
-	zapConfig := zap.NewDevelopmentConfig()
-	zapConfig.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
-	logger, err := zapConfig.Build()
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to initialize logger")
-	}
-
-	return logger, nil
 }

@@ -108,6 +108,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewport = viewport.New(msg.Width, msg.Height-verticalMarginHeight)
 			m.viewport.YPosition = headerHeight
 			m.viewport.SetContent(m.logs)
+			m.viewport.MouseWheelEnabled = true // Enable mouse wheel scrolling
 
 			m.ready = true
 		} else {

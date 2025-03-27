@@ -1,2 +1,4 @@
 config.toml
+config.*.toml
 ibc.log
+logs/

@@ -20,10 +20,6 @@ func distributeCmd() *cobra.Command {
 		Args: cobra.ExactArgs(4),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			logger, err := createStandardLogger()
-			if err != nil {
-				return errors.Wrap(err, "failed to create logger")
-			}
 			chainID := args[0]
 			senderWalletID := args[1]
 			denom := args[2]
@@ -38,9 +34,9 @@ func distributeCmd() *cobra.Command {
 				return errors.Wrap(err, "failed to build network")
 			}
 
-			chain := network.GetChain(chainID)
-			if chain == nil {
-				return errors.Errorf("chain not found: %s", chainID)
+			chain, err := network.GetChain(chainID)
+			if err != nil {
+				return errors.Wrapf(err, "failed to get chain %s", chainID)
 			}
 
 			senderWallet, err := chain.GetWallet(senderWalletID)

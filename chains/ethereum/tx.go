@@ -77,7 +77,7 @@ func (e *Ethereum) Transact(ctx context.Context, wallet *Wallet, doTx func(*ethc
 	}
 
 	if receipt.Status != ethtypes.ReceiptStatusSuccessful {
-		return nil, errors.New("failed to approve transfer")
+		return nil, errors.Errorf("tx failed for %s, with receipt: %v", tx.Hash().String(), receipt)
 	}
 
 	return receipt, nil
@@ -97,7 +97,8 @@ func GetTransactOpts(ctx context.Context, ethClient *ethclient.Client, chainID *
 		return nil, errors.Wrap(err, "failed to get suggested gas price")
 	}
 
-	txOpts.GasPrice = new(big.Int).Add(suggestedGasPrice, big.NewInt(extraGwei*1000000000)) // Add extra Gwei
+	txOpts.GasPrice = suggestedGasPrice
+	// txOpts.GasPrice = new(big.Int).Add(suggestedGasPrice, big.NewInt(extraGwei*1000000000)) // Add extra Gwei
 
 	nonce, err := ethClient.PendingNonceAt(context.Background(), fromAddress)
 	if err != nil {

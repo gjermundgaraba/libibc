@@ -1,14 +1,11 @@
 package tui
 
 import (
-	"os"
 	"sync"
 
-	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
+	"github.com/gjermundgaraba/libibc/cmd/ibc/logging"
 )
 
 var (
@@ -35,9 +32,7 @@ var (
 type Tui struct {
 	*Model
 	program *tea.Program
-	logFile *os.File
 	mutex   sync.Mutex
-	logger  *zap.Logger
 }
 
 type logUpdate struct {
@@ -60,45 +55,25 @@ type addStatusModelUpdate struct {
 	status *StatusModel
 }
 
-func NewTui(initLog string, initStatus string) *Tui {
-	s := spinner.New()
-	s.Spinner = spinner.Dot
-	s.Style = spinnerStyle
-
+func NewTui(logWriter *logging.IBCLogWriter, initLog string, initStatus string) *Tui {
 	mainStatus := NewStatusModel(initStatus)
 
 	model := NewModel(initLog, mainStatus)
 
-	// Create an actual file for logging
-	file, err := os.OpenFile("ibc.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		panic(err)
-	}
-
 	tuiInstance := &Tui{
-		Model:   model,
-		logFile: file,
-		mutex:   sync.Mutex{},
+		Model: model,
+		mutex: sync.Mutex{},
 	}
 
-	// Create a custom zap logger that redirects to the TUI
-	encoderConfig := zap.NewDevelopmentEncoderConfig()
-	encoderConfig.TimeKey = ""
-	encoderConfig.LevelKey = ""
-	encoderConfig.NameKey = ""
-	encoderConfig.CallerKey = ""
-
-	tuiCore := zapcore.NewCore(
-		zapcore.NewConsoleEncoder(encoderConfig),
-		zapcore.AddSync(&tuiLogWriter{tui: tuiInstance}),
-		zap.DebugLevel,
-	)
-	tuiInstance.logger = zap.New(tuiCore)
+	logWriter.AddExtraLogger(func(entry string) {
+		tuiInstance.AddLogEntry(entry)
+	})
 
 	// Initialize the program here but don't run it yet
 	tuiInstance.program = tea.NewProgram(
 		tuiInstance.Model,
-		tea.WithAltScreen(),       // use the full size of the terminal in its "alternate screen buffer"
+		// Disable alt screen to allow text selection with mouse
+		// tea.WithAltScreen(),
 		tea.WithMouseCellMotion(), // turn on mouse support so we can track the mouse wheel
 	)
 
@@ -130,21 +105,8 @@ func (t *Tui) AddLogEntry(entry string) {
 	t.program.Send(logUpdate{content: entry})
 }
 
-// GetLogger returns the TUI's logger for external use
-func (t *Tui) GetLogger() *zap.Logger {
-	return t.logger
-}
-
 // Run starts the TUI program and blocks until it exits
 func (t *Tui) Run() error {
 	_, err := t.program.Run()
 	return err
 }
-
-// Close closes any resources used by the TUI
-func (t *Tui) Close() {
-	if t.logFile != nil {
-		t.logFile.Close()
-	}
-}
-

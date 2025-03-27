@@ -7,6 +7,7 @@ import (
 	"github.com/gjermundgaraba/libibc/ibc"
 	"github.com/gjermundgaraba/libibc/utils"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 )
 
 func (c *Cosmos) GetPackets(ctx context.Context, txHash string) ([]ibc.Packet, error) {
@@ -33,6 +34,7 @@ func (c *Cosmos) IsPacketReceived(ctx context.Context, packet ibc.Packet) (bool,
 	if err != nil {
 		return false, errors.Wrap(err, "failed to query packet receipt")
 	}
+	c.logger.Debug("Querying packet receipt", zap.String("ClientID", packet.DestinationClient), zap.Uint64("Sequence", packet.Sequence), zap.Any("Response", resp))
 
 	return resp.Received, nil
 }

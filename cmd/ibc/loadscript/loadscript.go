@@ -13,18 +13,26 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+type Stage uint8
+
 type ProgressUpdate struct {
-	FromChain        string
-	ToChain          string
-	CurrentTransfers int
-	TotalTransfers   int
-	CurrentRelays    int
-	InQueueRelays    int
-	IsCompleted      bool
-	IsError          bool
-	ErrorMessage     string
-	Stage            string
+	UpdateType Stage
+
+	FromChain         string
+	ToChain           string
+	CurrentTransfers  int
+	TotalTransfers    int
+	CompletedRelaying int
+	InQueueRelays     int
+	ErrorMessage      string
 }
+
+const (
+	ErrorUpdate Stage = iota
+	TransferUpdate
+	RelayingUpdate
+	DoneUpdate
+)
 
 func TransferAndRelayFromAToB(
 	ctx context.Context,
@@ -50,56 +58,59 @@ func TransferAndRelayFromAToB(
 	transferCompleted := 0
 
 	progressCh <- ProgressUpdate{
-		FromChain:        fromChain.GetChainID(),
-		ToChain:          toChain.GetChainID(),
-		CurrentTransfers: 0,
-		TotalTransfers:   totalTransfer,
-		CurrentRelays:    0,
-		InQueueRelays:    0,
-		Stage:            "transfer",
+		FromChain:         fromChain.GetChainID(),
+		ToChain:           toChain.GetChainID(),
+		CurrentTransfers:  0,
+		TotalTransfers:    totalTransfer,
+		CompletedRelaying: 0,
+		InQueueRelays:     0,
+		UpdateType:        TransferUpdate,
+	}
+
+	reportErr := func(err error) {
+		progressCh <- ProgressUpdate{
+			UpdateType:     ErrorUpdate,
+			FromChain:      fromChain.GetChainID(),
+			ToChain:        toChain.GetChainID(),
+			TotalTransfers: totalTransfer,
+			ErrorMessage:   err.Error(),
+		}
 	}
 
 	go func() {
 		errGroup := errgroup.Group{}
 
-		for i := 0; i < len(toWallets); i++ {
+		for i := range toWallets {
 			idx := i
 			errGroup.Go(func() error {
 				chainAWallet := fromWallets[idx]
 				chainBWallet := toWallets[idx]
 
-				for i := 0; i < numPacketsPerWallet; i++ {
+				for range numPacketsPerWallet {
 					var packet ibc.Packet
 					if err := withRetry(func() error {
 						var err error
 						packet, err = fromChain.SendTransfer(ctx, fromClientId, chainAWallet, transferAmount, denom, chainBWallet.Address())
 						return err
 					}); err != nil {
-						progressCh <- ProgressUpdate{
-							FromChain:      fromChain.GetChainID(),
-							ToChain:        toChain.GetChainID(),
-							TotalTransfers: totalTransfer,
-							IsError:        true,
-							ErrorMessage:   err.Error(),
-							Stage:          "error",
-						}
+						reportErr(err)
 						return errors.Wrapf(err, "failed to create transfer from %s to chain %s", fromChain.GetChainID(), toChain.GetChainID())
 					}
 					relayerQueue.Add(packet)
 
 					aToBUpdateMutext.Lock()
 					transferCompleted++
-					
+
 					inQueue, _, completedRelaying := relayerQueue.Status()
-					
+
 					progressCh <- ProgressUpdate{
-						FromChain:        fromChain.GetChainID(),
-						ToChain:          toChain.GetChainID(),
-						CurrentTransfers: transferCompleted,
-						TotalTransfers:   totalTransfer,
-						CurrentRelays:    completedRelaying,
-						InQueueRelays:    inQueue,
-						Stage:            "transfer",
+						UpdateType:        TransferUpdate,
+						FromChain:         fromChain.GetChainID(),
+						ToChain:           toChain.GetChainID(),
+						CurrentTransfers:  transferCompleted,
+						TotalTransfers:    totalTransfer,
+						CompletedRelaying: completedRelaying,
+						InQueueRelays:     inQueue,
 					}
 					aToBUpdateMutext.Unlock()
 
@@ -122,69 +133,53 @@ func TransferAndRelayFromAToB(
 		}
 
 		progressCh <- ProgressUpdate{
+			UpdateType:       TransferUpdate,
 			FromChain:        fromChain.GetChainID(),
 			ToChain:          toChain.GetChainID(),
 			CurrentTransfers: transferCompleted,
 			TotalTransfers:   totalTransfer,
-			Stage:            "transfer",
 		}
-		
+
 		logger.Info(fmt.Sprintf("Waiting for transfers to complete from %s to %s", fromChain.GetChainID(), toChain.GetChainID()))
 		if err := errGroup.Wait(); err != nil {
 			logger.Error("Failed to complete transfers", zap.Error(err))
-			
-			progressCh <- ProgressUpdate{
-				FromChain:      fromChain.GetChainID(),
-				ToChain:        toChain.GetChainID(),
-				TotalTransfers: totalTransfer,
-				IsError:        true,
-				ErrorMessage:   err.Error(),
-				Stage:          "error",
-			}
-			
+			reportErr(err)
+
 			close(progressCh)
 			return
 		}
-		
+
 		logger.Info(fmt.Sprintf("Transfers completed from %s to %s", fromChain.GetChainID(), toChain.GetChainID()))
 		progressCh <- ProgressUpdate{
 			FromChain:        fromChain.GetChainID(),
 			ToChain:          toChain.GetChainID(),
 			CurrentTransfers: totalTransfer,
 			TotalTransfers:   totalTransfer,
-			Stage:            "relaying",
+			UpdateType:       RelayingUpdate,
 		}
 
 		inQueue, currentlyRelaying, completedRelaying := relayerQueue.Status()
-		logger.Info("Flushing queue", 
-			zap.String("from-chain", fromChain.GetChainID()), 
-			zap.String("to-chain", toChain.GetChainID()), 
-			zap.Int("in-queue", inQueue), 
-			zap.Int("currently-relaying", currentlyRelaying), 
+		logger.Info("Flushing queue",
+			zap.String("from-chain", fromChain.GetChainID()),
+			zap.String("to-chain", toChain.GetChainID()),
+			zap.Int("in-queue", inQueue),
+			zap.Int("currently-relaying", currentlyRelaying),
 			zap.Int("completed-relaying", completedRelaying))
-		
+
 		progressCh <- ProgressUpdate{
-			FromChain:        fromChain.GetChainID(),
-			ToChain:          toChain.GetChainID(),
-			CurrentTransfers: totalTransfer,
-			TotalTransfers:   totalTransfer,
-			CurrentRelays:    completedRelaying,
-			InQueueRelays:    inQueue,
-			Stage:            "relaying",
+			UpdateType:        RelayingUpdate,
+			FromChain:         fromChain.GetChainID(),
+			ToChain:           toChain.GetChainID(),
+			CurrentTransfers:  totalTransfer,
+			TotalTransfers:    totalTransfer,
+			CompletedRelaying: completedRelaying,
+			InQueueRelays:     inQueue,
 		}
-		
+
 		if err := relayerQueue.Flush(); err != nil {
 			logger.Error("Failed to flush queue", zap.Error(err))
-			
-			progressCh <- ProgressUpdate{
-				FromChain:      fromChain.GetChainID(),
-				ToChain:        toChain.GetChainID(),
-				TotalTransfers: totalTransfer,
-				IsError:        true,
-				ErrorMessage:   err.Error(),
-				Stage:          "error",
-			}
-			
+			reportErr(err)
+
 			close(progressCh)
 			return
 		}
@@ -195,16 +190,15 @@ func TransferAndRelayFromAToB(
 			zap.Int("completed-packets", totalTransfer))
 
 		progressCh <- ProgressUpdate{
-			FromChain:        fromChain.GetChainID(),
-			ToChain:          toChain.GetChainID(),
-			CurrentTransfers: totalTransfer,
-			TotalTransfers:   totalTransfer,
-			CurrentRelays:    totalTransfer,
-			InQueueRelays:    0,
-			IsCompleted:      true,
-			Stage:            "completed",
+			UpdateType:        DoneUpdate,
+			FromChain:         fromChain.GetChainID(),
+			ToChain:           toChain.GetChainID(),
+			CurrentTransfers:  totalTransfer,
+			TotalTransfers:    totalTransfer,
+			CompletedRelaying: totalTransfer,
+			InQueueRelays:     0,
 		}
-		
+
 		close(progressCh)
 	}()
 
@@ -223,3 +217,4 @@ func withRetry(f func() error) error {
 
 	return err
 }
+

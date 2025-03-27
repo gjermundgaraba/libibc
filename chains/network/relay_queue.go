@@ -83,7 +83,13 @@ func (rq *RelayerQueue) Flush() error {
 		queueCopy := make([]ibc.Packet, len(rq.queue))
 		copy(queueCopy, rq.queue)
 
-		return rq.relay(queueCopy...)
+		if err := rq.relay(queueCopy...); err != nil {
+			return errors.Wrap(err, "failed to relay packets")
+		}
+	} else {
+		if err := rq.errGroup.Wait(); err != nil {
+			return errors.Wrap(err, "failed to wait for relay")
+		}
 	}
 
 	rq.queue = make([]ibc.Packet, 0)
@@ -116,6 +122,11 @@ func (rq *RelayerQueue) relay(packets ...ibc.Packet) error {
 		rq.logger.Info("Finished relaying packets", zap.Strings("tx_ids", txIDs), zap.String("source_chain", rq.sourceChain.GetChainID()), zap.String("destination_chain", rq.destinationChain.GetChainID()), zap.String("destination_client", destClient), zap.Any("relayer-address", rq.relayerWallet.Address()))
 	} else {
 		// Just wait for packet receipts
+		txIDs := make([]string, len(packets))
+		for i, packet := range packets {
+			txIDs[i] = packet.TxHash
+		}
+		rq.logger.Info("Waiting for packet receipts (i.e. waiting for smart relayer to pick up packets)", zap.Int("num_packets", len(packets)), zap.Strings("tx_ids", txIDs), zap.String("source_chain", rq.sourceChain.GetChainID()), zap.String("destination_chain", rq.destinationChain.GetChainID()))
 		waitingPackets := make([]ibc.Packet, len(packets))
 		copy(waitingPackets, packets)
 
@@ -125,7 +136,12 @@ func (rq *RelayerQueue) relay(packets ...ibc.Packet) error {
 
 		for len(waitingPackets) > 0 && time.Since(waitStart) < maxWait {
 			if numAttempts%10 == 0 {
-				rq.logger.Info("Waiting for packet receipts", zap.Int("num_packets", len(waitingPackets)), zap.Duration("elapsed", time.Since(waitStart)))
+				txIDs := make([]string, len(packets))
+				for i, packet := range packets {
+					txIDs[i] = packet.TxHash
+				}
+
+				rq.logger.Info("Waiting for packet receipts", zap.Strings("tx_ids", txIDs), zap.Int("num_packets", len(waitingPackets)), zap.Duration("elapsed", time.Since(waitStart)), zap.String("source_chain", rq.sourceChain.GetChainID()), zap.String("destination_chain", rq.destinationChain.GetChainID()))
 			}
 
 			var remainingPackets []ibc.Packet

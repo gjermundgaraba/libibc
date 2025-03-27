@@ -14,17 +14,16 @@ func traceCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			logger, err := createStandardLogger()
-			if err != nil {
-				return errors.Wrap(err, "failed to create logger")
-			}
 
 			network, err := cfg.ToNetwork(ctx, logger)
 			if err != nil {
 				return errors.Wrap(err, "failed to build network")
 			}
 
-			chain := network.GetChain(args[0])
+			chain, err := network.GetChain(args[0])
+			if err != nil {
+				return errors.Wrapf(err, "failed to get chain %s", args[0])
+			}
 
 			packets, err := chain.GetPackets(ctx, args[1])
 			if err != nil {

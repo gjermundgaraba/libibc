@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"os"
 
+	"github.com/gjermundgaraba/libibc/chains/network"
 	"github.com/gjermundgaraba/libibc/cmd/ibc/loadscript"
 	"github.com/gjermundgaraba/libibc/cmd/ibc/tui"
 	"github.com/pkg/errors"
@@ -15,6 +17,7 @@ import (
 
 func scriptCmd() *cobra.Command {
 	var (
+		maxWallets          int
 		numPacketsPerWallet int
 		transferAmount      int
 
@@ -36,17 +39,22 @@ func scriptCmd() *cobra.Command {
 		Short: "Run a script",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			tuiInstance := tui.NewTui("Starting script", "Initializing")
-			tuiLogger := tuiInstance.GetLogger()
+			tuiInstance := tui.NewTui(logWriter, "Starting script", "Initializing")
 
-			network, err := cfg.ToNetwork(ctx, tuiInstance.GetLogger())
+			network, err := cfg.ToNetwork(ctx, logger)
 			if err != nil {
 				return errors.Wrap(err, "failed to build network")
 			}
 
 			transferAmountBig := big.NewInt(int64(transferAmount))
-			chainA := network.GetChain(chainAId)
-			chainB := network.GetChain(chainBId)
+			chainA, err := network.GetChain(chainAId)
+			if err != nil {
+				return errors.Wrapf(err, "failed to get chain %s", chainAId)
+			}
+			chainB, err := network.GetChain(chainBId)
+			if err != nil {
+				return errors.Wrapf(err, "failed to get chain %s", chainBId)
+			}
 
 			chainARelayerWallet, err := chainA.GetWallet(chainARelayerWalletId)
 			if err != nil {
@@ -61,11 +69,11 @@ func scriptCmd() *cobra.Command {
 			chainBWallets := chainB.GetWallets()
 			chainAWallets := chainA.GetWallets()
 
-			if len(chainBWallets) > 5 {
-				chainBWallets = chainBWallets[:5]
+			if len(chainBWallets) > maxWallets {
+				chainBWallets = chainBWallets[:maxWallets]
 			}
-			if len(chainAWallets) > 5 {
-				chainAWallets = chainAWallets[:5]
+			if len(chainAWallets) > maxWallets {
+				chainAWallets = chainAWallets[:maxWallets]
 			}
 
 			if len(chainBWallets) != len(chainAWallets) {
@@ -75,33 +83,22 @@ func scriptCmd() *cobra.Command {
 			go func() {
 				defer func() {
 					if r := recover(); r != nil {
-						tuiLogger.Error("Panic", zap.Any("panic", r))
+						logger.Error("Panic", zap.Any("panic", r))
 						tuiInstance.UpdateMainErrorStatus(fmt.Sprintf("Panic: %v", r))
 					}
 				}()
 
-				tuiLogger.Info("Starting up", zap.Int("wallet-count", len(chainBWallets)))
+				logger.Info("Starting up", zap.Int("wallet-count", len(chainBWallets)))
 
 				var mainErrGroup errgroup.Group
 
 				tuiInstance.UpdateMainStatus("Transferring...")
 
-				transferStatusModelAToB := tui.NewStatusModel(fmt.Sprintf("Transferring from %s to %s 0/0", chainA.GetChainID(), chainB.GetChainID()))
-				tuiInstance.AddStatusModel(transferStatusModelAToB)
-
-				relayingStatusModelAToB := tui.NewStatusModel(fmt.Sprintf("Relaying from %s to %s 0/0", chainA.GetChainID(), chainB.GetChainID()))
-				tuiInstance.AddStatusModel(relayingStatusModelAToB)
-
-				transferStatusModelBToA := tui.NewStatusModel(fmt.Sprintf("Transferring from %s to %s 0/0", chainB.GetChainID(), chainA.GetChainID()))
-				tuiInstance.AddStatusModel(transferStatusModelBToA)
-
-				relayingStatusModelBToA := tui.NewStatusModel(fmt.Sprintf("Relaying from %s to %s 0/0", chainB.GetChainID(), chainA.GetChainID()))
-				tuiInstance.AddStatusModel(relayingStatusModelBToA)
-
 				mainErrGroup.Go(func() error {
-					progressCh, err := loadscript.TransferAndRelayFromAToB(
+					return run(
 						ctx,
-						tuiLogger,
+						tuiInstance,
+						logger,
 						network,
 						chainA,
 						chainAClientId,
@@ -114,53 +111,13 @@ func scriptCmd() *cobra.Command {
 						numPacketsPerWallet,
 						selfRelay,
 					)
-					if err != nil {
-						return err
-					}
-
-					for update := range progressCh {
-						if update.IsError {
-							transferStatusModelAToB.UpdateErrorStatus(fmt.Sprintf("Failed: %s", update.ErrorMessage))
-							return errors.New(update.ErrorMessage)
-						}
-
-						switch update.Stage {
-						case "transfer":
-							transferStatusModelAToB.UpdateStatus(fmt.Sprintf("Transferring from %s to %s (%d/%d)",
-								update.FromChain, update.ToChain, update.CurrentTransfers, update.TotalTransfers))
-							transferStatusModelAToB.UpdateProgress(int(update.CurrentTransfers * 100 / update.TotalTransfers))
-
-							relayingStatusModelAToB.UpdateStatus(fmt.Sprintf("Relaying from %s to %s %d/%d (waiting: %d)",
-								update.FromChain, update.ToChain, update.CurrentRelays, update.TotalTransfers, update.InQueueRelays))
-							if update.TotalTransfers > 0 {
-								relayingStatusModelAToB.UpdateProgress(int(update.CurrentRelays * 100 / update.TotalTransfers))
-							}
-
-						case "relaying":
-							relayingStatusModelAToB.UpdateStatus(fmt.Sprintf("Relaying from %s to %s %d/%d (waiting: %d)",
-								update.FromChain, update.ToChain, update.CurrentRelays, update.TotalTransfers, update.InQueueRelays))
-							if update.TotalTransfers > 0 {
-								relayingStatusModelAToB.UpdateProgress(int(update.CurrentRelays * 100 / update.TotalTransfers))
-							}
-
-						case "completed":
-							transferStatusModelAToB.UpdateStatus(fmt.Sprintf("Transfers completed from %s to %s",
-								update.FromChain, update.ToChain))
-							transferStatusModelAToB.UpdateProgress(100)
-
-							relayingStatusModelAToB.UpdateStatus(fmt.Sprintf("Relay queue flushed from %s to %s %d/%d",
-								update.FromChain, update.ToChain, update.TotalTransfers, update.TotalTransfers))
-							relayingStatusModelAToB.UpdateProgress(100)
-						}
-					}
-
-					return nil
 				})
 
 				mainErrGroup.Go(func() error {
-					progressCh, err := loadscript.TransferAndRelayFromAToB(
+					return run(
 						ctx,
-						tuiLogger,
+						tuiInstance,
+						logger,
 						network,
 						chainB,
 						chainBClientId,
@@ -173,55 +130,14 @@ func scriptCmd() *cobra.Command {
 						numPacketsPerWallet,
 						selfRelay,
 					)
-					if err != nil {
-						return err
-					}
-
-					for update := range progressCh {
-						if update.IsError {
-							transferStatusModelBToA.UpdateErrorStatus(fmt.Sprintf("Failed: %s", update.ErrorMessage))
-							return errors.New(update.ErrorMessage)
-						}
-
-						switch update.Stage {
-						case "transfer":
-							transferStatusModelBToA.UpdateStatus(fmt.Sprintf("Transferring from %s to %s (%d/%d)",
-								update.FromChain, update.ToChain, update.CurrentTransfers, update.TotalTransfers))
-							transferStatusModelBToA.UpdateProgress(int(update.CurrentTransfers * 100 / update.TotalTransfers))
-
-							relayingStatusModelBToA.UpdateStatus(fmt.Sprintf("Relaying from %s to %s %d/%d (waiting: %d)",
-								update.FromChain, update.ToChain, update.CurrentRelays, update.TotalTransfers, update.InQueueRelays))
-							if update.TotalTransfers > 0 {
-								relayingStatusModelBToA.UpdateProgress(int(update.CurrentRelays * 100 / update.TotalTransfers))
-							}
-
-						case "relaying":
-							relayingStatusModelBToA.UpdateStatus(fmt.Sprintf("Relaying from %s to %s %d/%d (waiting: %d)",
-								update.FromChain, update.ToChain, update.CurrentRelays, update.TotalTransfers, update.InQueueRelays))
-							if update.TotalTransfers > 0 {
-								relayingStatusModelBToA.UpdateProgress(int(update.CurrentRelays * 100 / update.TotalTransfers))
-							}
-
-						case "completed":
-							transferStatusModelBToA.UpdateStatus(fmt.Sprintf("Transfers completed from %s to %s",
-								update.FromChain, update.ToChain))
-							transferStatusModelBToA.UpdateProgress(100)
-
-							relayingStatusModelBToA.UpdateStatus(fmt.Sprintf("Relay queue flushed from %s to %s %d/%d",
-								update.FromChain, update.ToChain, update.TotalTransfers, update.TotalTransfers))
-							relayingStatusModelBToA.UpdateProgress(100)
-						}
-					}
-
-					return nil
 				})
 
 				if err := mainErrGroup.Wait(); err != nil {
-					tuiLogger.Error("Failed to complete transfers", zap.Error(err))
+					logger.Error("Failed to complete transfers", zap.Error(err))
 					tuiInstance.UpdateMainErrorStatus(fmt.Sprintf("Failed to complete transfers: %s", err.Error()))
 				}
 
-				tuiLogger.Info("All transfers and relays completed successfully")
+				logger.Info("All transfers and relays completed successfully")
 				tuiInstance.UpdateMainStatus("All transfers and relays completed")
 
 			}()
@@ -231,20 +147,19 @@ func scriptCmd() *cobra.Command {
 				os.Exit(1)
 			}
 
-			defer tuiInstance.Close()
-
 			return nil
 		},
 	}
 
+	cmd.Flags().IntVar(&maxWallets, "max-wallets", 5, "Maximum number of wallets to use")
 	cmd.Flags().IntVar(&numPacketsPerWallet, "packets-per-wallet", 5, "Number of packets to send per wallet")
 	cmd.Flags().IntVar(&transferAmount, "transfer-amount", 100, "Amount to transfer")
-	cmd.Flags().StringVar(&chainAId, "chain-a-id", "11155111", "Chain A ID")
-	cmd.Flags().StringVar(&chainAClientId, "chain-a-client-id", "hub-testnet-0", "Chain A client ID")
-	cmd.Flags().StringVar(&chainADenom, "chain-a-denom", "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14", "Chain A denom")
+	cmd.Flags().StringVar(&chainAId, "chain-a-id", "1", "Chain A ID")
+	cmd.Flags().StringVar(&chainAClientId, "chain-a-client-id", "hub-testnet-2", "Chain A client ID")
+	cmd.Flags().StringVar(&chainADenom, "chain-a-denom", "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", "Chain A denom")
 	cmd.Flags().StringVar(&chainARelayerWalletId, "chain-a-relayer-wallet-id", "eth-relayer", "Chain A relayer wallet ID")
 	cmd.Flags().StringVar(&chainBId, "chain-b-id", "provider", "Chain B ID")
-	cmd.Flags().StringVar(&chainBClientId, "chain-b-client-id", "08-wasm-262", "Chain B client ID")
+	cmd.Flags().StringVar(&chainBClientId, "chain-b-client-id", "08-wasm-271", "Chain B client ID")
 	cmd.Flags().StringVar(&chainBDenom, "chain-b-denom", "uatom", "Chain B denom")
 	cmd.Flags().StringVar(&chainBRelayerWalletId, "chain-b-relayer-wallet-id", "cosmos-relayer", "Chain B relayer wallet ID")
 	cmd.Flags().BoolVar(&selfRelay, "self-relay", false, "Manually relay packets")
@@ -252,3 +167,79 @@ func scriptCmd() *cobra.Command {
 	return cmd
 }
 
+func run(
+	ctx context.Context,
+	tuiInstance *tui.Tui,
+	logger *zap.Logger,
+	network *network.Network,
+	chainA network.Chain,
+	chainAClientId string,
+	chainADenom string,
+	chainAWallets []network.Wallet,
+	chainB network.Chain,
+	chainBWallets []network.Wallet,
+	chainBRelayerWallet network.Wallet,
+	transferAmountBig *big.Int,
+	numPacketsPerWallet int,
+	selfRelay bool,
+) error {
+	transferStatusModelAToB := tui.NewStatusModel(fmt.Sprintf("Transferring from %s to %s 0/0", chainA.GetChainID(), chainB.GetChainID()))
+	tuiInstance.AddStatusModel(transferStatusModelAToB)
+
+	relayingStatusModelAToB := tui.NewStatusModel(fmt.Sprintf("Relaying from %s to %s 0/0", chainA.GetChainID(), chainB.GetChainID()))
+	tuiInstance.AddStatusModel(relayingStatusModelAToB)
+
+	progressCh, err := loadscript.TransferAndRelayFromAToB(
+		ctx,
+		logger,
+		network,
+		chainA,
+		chainAClientId,
+		chainADenom,
+		chainAWallets,
+		chainB,
+		chainBWallets,
+		chainBRelayerWallet,
+		transferAmountBig,
+		numPacketsPerWallet,
+		selfRelay,
+	)
+	if err != nil {
+		return err
+	}
+
+	for update := range progressCh {
+		switch update.UpdateType {
+
+		case loadscript.TransferUpdate:
+			transferStatusModelAToB.UpdateStatus(fmt.Sprintf("Transferring from %s to %s (%d/%d)",
+				update.FromChain, update.ToChain, update.CurrentTransfers, update.TotalTransfers))
+			transferStatusModelAToB.UpdateProgress(int(update.CurrentTransfers * 100 / update.TotalTransfers))
+
+			relayingStatusModelAToB.UpdateStatus(fmt.Sprintf("Relaying from %s to %s %d/%d (waiting: %d)",
+				update.FromChain, update.ToChain, update.CompletedRelaying, update.TotalTransfers, update.InQueueRelays))
+			if update.TotalTransfers > 0 {
+				relayingStatusModelAToB.UpdateProgress(int(update.CompletedRelaying * 100 / update.TotalTransfers))
+			}
+		case loadscript.RelayingUpdate:
+			relayingStatusModelAToB.UpdateStatus(fmt.Sprintf("Relaying from %s to %s %d/%d (waiting: %d)",
+				update.FromChain, update.ToChain, update.CompletedRelaying, update.TotalTransfers, update.InQueueRelays))
+			if update.TotalTransfers > 0 {
+				relayingStatusModelAToB.UpdateProgress(int(update.CompletedRelaying * 100 / update.TotalTransfers))
+			}
+		case loadscript.DoneUpdate:
+			transferStatusModelAToB.UpdateStatus(fmt.Sprintf("Transfers completed from %s to %s",
+				update.FromChain, update.ToChain))
+			transferStatusModelAToB.UpdateProgress(100)
+
+			relayingStatusModelAToB.UpdateStatus(fmt.Sprintf("Relay queue flushed from %s to %s %d/%d",
+				update.FromChain, update.ToChain, update.TotalTransfers, update.TotalTransfers))
+			relayingStatusModelAToB.UpdateProgress(100)
+			return nil
+		default:
+			return errors.New("unexpected update type")
+		}
+	}
+
+	return nil
+}

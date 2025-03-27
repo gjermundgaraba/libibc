@@ -10,27 +10,33 @@ import (
 
 func relayCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "relay [from-chain-id] [to-chain-id] [tx-hash]",
+		Use:   "relay [from-chain-id] [to-chain-id] [tx-hash] [relayer-wallet-id]",
 		Short: "Relay IBC packet",
-		Args:  cobra.ExactArgs(3),
+		Args:  cobra.ExactArgs(4),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			logger, err := createStandardLogger()
-			if err != nil {
-				return errors.Wrap(err, "failed to create logger")
-			}
+
+			logWriter.AddExtraLogger(func(entry string) {
+				cmd.Println(entry)
+			})
 
 			network, err := cfg.ToNetwork(ctx, logger)
 			if err != nil {
 				return errors.Wrap(err, "failed to build network")
 			}
 
-			fromChain := network.GetChain(args[0])
-			toChain := network.GetChain(args[1])
+			fromChain, err := network.GetChain(args[0])
+			if err != nil {
+				return errors.Wrapf(err, "failed to get chain %s", args[0])
+			}
+			toChain, err := network.GetChain(args[1])
+			if err != nil {
+				return errors.Wrapf(err, "failed to get chain %s", args[1])
+			}
 			txHash := args[2]
 
-			relayerWalletID := "relayer"
-			relayerWallet, err := fromChain.GetWallet(relayerWalletID)
+			relayerWalletID := args[3]
+			relayerWallet, err := toChain.GetWallet(relayerWalletID)
 			if err != nil {
 				return errors.Wrapf(err, "failed to get wallet %s", relayerWalletID)
 			}

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gjermundgaraba/libibc/ibc"
+	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
 
@@ -69,8 +70,13 @@ func BuildNetwork(logger *zap.Logger, chains []Chain, relayer Relayer) (*Network
 	return network, nil
 }
 
-func (n *Network) GetChain(chainID string) Chain {
-	return n.chains[chainID]
+func (n *Network) GetChain(chainID string) (Chain, error) {
+	chain, ok := n.chains[chainID]
+	if !ok || chain == nil {
+		return nil, errors.Errorf("chain not found: %s", chainID)
+	}
+
+	return chain, nil
 }
 
 func (n *Network) TransferWithRelay(
