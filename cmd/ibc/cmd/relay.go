@@ -52,7 +52,7 @@ func relayCmd() *cobra.Command {
 				return errors.Errorf("expected 1 packet, got %d", len(packets))
 			}
 
-			relayTxHash, err := network.Relayer.Relay(ctx, fromChain, toChain, packets[0].DestinationClient, relayerWallet, []string{txHash})
+			relayTxHash, err := network.Relayer.Relay(ctx, fromChain, toChain, packets[0].SourceClient, packets[0].DestinationClient, relayerWallet, []string{txHash})
 			if err != nil {
 				return errors.Wrapf(err, "failed to relay transfer tx: %s", packets[0].TxHash)
 			}

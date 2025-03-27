@@ -110,11 +110,12 @@ func (rq *RelayerQueue) relay(packets ...ibc.Packet) error {
 		for i, packet := range packets {
 			txIDs[i] = packet.TxHash
 		}
+		srcClient := packets[0].SourceClient
 		destClient := packets[0].DestinationClient
 
 		rq.logger.Info("Relaying packets", zap.Strings("tx_ids", txIDs), zap.String("source_chain", rq.sourceChain.GetChainID()), zap.String("destination_chain", rq.destinationChain.GetChainID()), zap.String("destination_client", destClient), zap.Any("relayer-wallet", rq.relayerWallet.Address()))
 
-		_, err := rq.relayer.Relay(ctx, rq.sourceChain, rq.destinationChain, destClient, rq.relayerWallet, txIDs)
+		_, err := rq.relayer.Relay(ctx, rq.sourceChain, rq.destinationChain, srcClient, destClient, rq.relayerWallet, txIDs)
 		if err != nil {
 			return errors.Wrapf(err, "failed to relay packets: %v", txIDs)
 		}

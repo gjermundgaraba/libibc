@@ -90,7 +90,7 @@ func TransferAndRelayFromAToB(
 					var packet ibc.Packet
 					if err := withRetry(func() error {
 						var err error
-						packet, err = fromChain.SendTransfer(ctx, fromClientId, chainAWallet, transferAmount, denom, chainBWallet.Address())
+						packet, err = fromChain.SendTransfer(ctx, fromClientId, chainAWallet, transferAmount, denom, chainBWallet.Address(), "")
 						return err
 					}); err != nil {
 						reportErr(err)
@@ -217,4 +217,3 @@ func withRetry(f func() error) error {
 
 	return err
 }
-

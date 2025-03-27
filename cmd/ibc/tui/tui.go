@@ -22,9 +22,9 @@ var (
 	}()
 
 	statusStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFFDF5")).
-			Background(lipgloss.Color("#25A065")).
-			Padding(0, 1)
+		Foreground(lipgloss.Color("#FFFDF5")).
+		Background(lipgloss.Color("#25A065")).
+		Padding(0, 1)
 
 	spinnerStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("69"))
 )
@@ -72,9 +72,7 @@ func NewTui(logWriter *logging.IBCLogWriter, initLog string, initStatus string) 
 	// Initialize the program here but don't run it yet
 	tuiInstance.program = tea.NewProgram(
 		tuiInstance.Model,
-		// Disable alt screen to allow text selection with mouse
-		// tea.WithAltScreen(),
-		tea.WithMouseCellMotion(), // turn on mouse support so we can track the mouse wheel
+		// Don't use alt screen to allow text selection
 	)
 
 	return tuiInstance

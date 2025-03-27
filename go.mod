@@ -15,7 +15,7 @@ require (
 	github.com/cosmos/gogoproto v1.7.0
 	github.com/cosmos/ibc-go/modules/light-clients/08-wasm/v10 v10.1.0
 	github.com/cosmos/ibc-go/v10 v10.1.0
-	github.com/cosmos/solidity-ibc-eureka/abigen v0.0.0-20250321232502-d318fcba0982
+	github.com/cosmos/solidity-ibc-eureka/packages/go-abigen v0.0.0-20250327192245-cfc6f978f15f
 	github.com/ethereum/go-ethereum v1.15.5
 	github.com/kurtosis-tech/kurtosis/api/golang v1.5.0
 	github.com/pelletier/go-toml v1.9.5

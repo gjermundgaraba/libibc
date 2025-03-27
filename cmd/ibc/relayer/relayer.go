@@ -26,7 +26,7 @@ func NewRelayer(logger *zap.Logger, relayerGRPCAddr string) *Relayer {
 	}
 }
 
-func (r *Relayer) Relay(ctx context.Context, srcChain network.Chain, dstChain network.Chain, dstClient string, relayerWallet network.Wallet, txIds []string) (string, error) {
+func (r *Relayer) Relay(ctx context.Context, srcChain network.Chain, dstChain network.Chain, srcClient string, dstClient string, relayerWallet network.Wallet, txIds []string) (string, error) {
 	conn, err := utils.GetGRPC(r.grpcAddr)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to get grpc connection")
@@ -52,10 +52,11 @@ func (r *Relayer) Relay(ctx context.Context, srcChain network.Chain, dstChain ne
 	relayerClient := NewRelayerServiceClient(conn)
 
 	req := &RelayByTxRequest{
-		SrcChain:       srcChain.GetChainID(),
-		DstChain:       dstChain.GetChainID(),
-		SourceTxIds:    txIdsBytes,
-		TargetClientId: dstClient,
+		SrcChain:    srcChain.GetChainID(),
+		DstChain:    dstChain.GetChainID(),
+		SourceTxIds: txIdsBytes,
+		SrcClientId: srcClient,
+		DstClientId: dstClient,
 	}
 	r.logger.Debug("Starting relay request", zap.String("srcChain", srcChain.GetChainID()), zap.String("dstChain", dstChain.GetChainID()), zap.Strings("txIds", txIds), zap.Any("txIdsBytes", txIdsBytes), zap.String("targetClientId", dstClient))
 	resp, err := relayerClient.RelayByTx(ctx, req)

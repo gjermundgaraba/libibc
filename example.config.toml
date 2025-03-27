@@ -1,0 +1,45 @@
+relayer-grpc-addr = "localhost:3000"
+
+[[chains]]
+  chain-id = "cosmoshub-4"
+  chain-type = "cosmos"
+  grpc-addr = "cosmos-grpc.polkachu.com:14990"
+  ics26-address = ""
+  relayer-helper-address = ""
+  rpc-addr = ""
+  wallet-ids = ["cosmos-1", "cosmos-relayer"]
+
+  [[chains.clients]]
+    client-id = "TODO"
+    counterparty-chain-id = "1"
+    counterparty-client-id = "TODO"
+
+[[chains]]
+  chain-id = "1"
+  chain-type = "ethereum"
+  grpc-addr = ""
+  ics26-address = "0x3aF134307D5Ee90faa2ba9Cdba14ba66414CF1A7"
+  relayer-helper-address = "0x3fcBB8b5d85FB5F77603e11536b5E90FeE37e6c0"
+  rpc-addr = "TODO"
+  wallet-ids = ["eth-1", "eth-relayer"]
+
+  [[chains.clients]]
+    client-id = "TODO"
+    counterparty-chain-id = "cosmoshub-4"
+    counterparty-client-id = "TODO"
+
+[[wallets]]
+  private-key = "d1a0faec1c17eaa670448daee4d393803e3ef220c624a388417b22cccdd7ce94"
+  wallet-id = "cosmos-1"
+
+[[wallets]]
+  private-key = "61526bbafcb8e00e3f707a50cdce5d50e978c933ed0a2401a8550363dd655ae0"
+  wallet-id = "eth-1"
+
+[[wallets]]
+  private-key = "4c10c4e3b7eb4682131d3df2613ae7a0cd91fd4e44a25daf734aa17b39fd64ba"
+  wallet-id = "eth-relayer"
+
+[[wallets]]
+  private-key = "ece0ea06b90ebb8934a1dd7d9979d31f6863912a8a1bb3331e8702feab6b54c0"
+  wallet-id = "cosmos-relayer"

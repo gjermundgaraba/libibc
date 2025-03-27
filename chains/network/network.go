@@ -38,7 +38,7 @@ type Chain interface {
 	IsPacketReceived(ctx context.Context, packet ibc.Packet) (bool, error)
 
 	SubmitRelayTx(ctx context.Context, txBz []byte, wallet Wallet) (string, error)
-	SendTransfer(ctx context.Context, clientID string, wallet Wallet, amount *big.Int, denom string, to string) (ibc.Packet, error)
+	SendTransfer(ctx context.Context, clientID string, wallet Wallet, amount *big.Int, denom string, to string, memo string) (ibc.Packet, error)
 	Send(ctx context.Context, wallet Wallet, amount *big.Int, denom string, toAddress string) (string, error)
 	GetBalance(ctx context.Context, address string, denom string) (*big.Int, error)
 }
@@ -50,7 +50,7 @@ type Wallet interface {
 }
 
 type Relayer interface {
-	Relay(ctx context.Context, srcChain Chain, dstChain Chain, dstClient string, relayerWallet Wallet, txIds []string) (string, error)
+	Relay(ctx context.Context, srcChain Chain, dstChain Chain, srcClient string, dstClient string, relayerWallet Wallet, txIds []string) (string, error)
 }
 
 func BuildNetwork(logger *zap.Logger, chains []Chain, relayer Relayer) (*Network, error) {
@@ -90,13 +90,14 @@ func (n *Network) TransferWithRelay(
 	amount *big.Int,
 	denom string,
 	to string,
+	memo string,
 ) error {
-	packet, err := srcChain.SendTransfer(ctx, srcClient, senderWallet, amount, denom, to)
+	packet, err := srcChain.SendTransfer(ctx, srcClient, senderWallet, amount, denom, to, memo)
 	if err != nil {
 		return err
 	}
 
-	sendRelayTxHash, err := n.Relayer.Relay(ctx, srcChain, dstChain, packet.DestinationClient, dstRelayerWallet, []string{packet.TxHash})
+	sendRelayTxHash, err := n.Relayer.Relay(ctx, srcChain, dstChain, srcClient, packet.DestinationClient, dstRelayerWallet, []string{packet.TxHash})
 	if err != nil {
 		return err
 	}
@@ -105,7 +106,7 @@ func (n *Network) TransferWithRelay(
 
 	time.Sleep(30 * time.Second)
 
-	ackRelayTxHash, err := n.Relayer.Relay(ctx, dstChain, srcChain, srcClient, srcRelayerWallet, []string{sendRelayTxHash})
+	ackRelayTxHash, err := n.Relayer.Relay(ctx, dstChain, srcChain, packet.DestinationClient, srcClient, srcRelayerWallet, []string{sendRelayTxHash})
 	if err != nil {
 		return err
 	}

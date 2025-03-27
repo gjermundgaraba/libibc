@@ -20,7 +20,8 @@ func transferCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "transfer [from-chain-id] [to-chain-id] [source-client] [from-wallet-id] [amount] [denom] [to-address]",
+		Use:   "transfer [from-chain-id] [to-chain-id] [source-client] [from-wallet-id] [amount] [denom] [to-address] [memo]",
+		Args:  cobra.ExactArgs(8),
 		Short: "Transfer tokens between two chains",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
@@ -34,6 +35,7 @@ func transferCmd() *cobra.Command {
 			amountStr := args[4]
 			denom := args[5]
 			toAddress := args[6]
+			memo := args[7]
 
 			networkConfig, err := cfg.ToNetwork(ctx, logger)
 			if err != nil {
@@ -78,7 +80,7 @@ func transferCmd() *cobra.Command {
 
 					tuiInstance.UpdateMainStatus("Transferring...")
 
-					packet, err := fromChain.SendTransfer(ctx, sourceClient, fromWallet, amount, denom, toAddress)
+					packet, err := fromChain.SendTransfer(ctx, sourceClient, fromWallet, amount, denom, toAddress, memo)
 					if err != nil {
 						return errors.Wrap(err, "failed to send transfer")
 					}

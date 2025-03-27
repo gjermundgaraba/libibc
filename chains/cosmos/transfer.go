@@ -23,6 +23,7 @@ func (c *Cosmos) SendTransfer(
 	amount *big.Int,
 	denom string,
 	to string,
+	memo string,
 ) (ibc.Packet, error) {
 	cosmosWallet, ok := wallet.(*Wallet)
 	if !ok {
@@ -37,7 +38,7 @@ func (c *Cosmos) SendTransfer(
 		Amount:   transferCoin.Amount.String(),
 		Sender:   wallet.Address(),
 		Receiver: to,
-		Memo:     "", // TODO: add memo for load testing purposed
+		Memo:     memo,
 	}
 	encodedPayload, err := transfertypes.EncodeABIFungibleTokenPacketData(&transferPayload)
 	if err != nil {

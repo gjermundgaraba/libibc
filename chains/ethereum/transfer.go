@@ -5,7 +5,7 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/cosmos/solidity-ibc-eureka/abigen/ics20transfer"
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics20transfer"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -25,6 +25,7 @@ func (e *Ethereum) SendTransfer(
 	amount *big.Int,
 	denom string,
 	to string,
+	memo string,
 ) (ibc.Packet, error) {
 	ethereumWallet, ok := wallet.(*Wallet)
 	if !ok {
@@ -71,7 +72,7 @@ func (e *Ethereum) SendTransfer(
 		SourceClient:     clientID,
 		DestPort:         "transfer",
 		TimeoutTimestamp: timeout,
-		Memo:             "",
+		Memo:             memo,
 	}
 
 	receipt, err := e.Transact(ctx, ethereumWallet, func(ethClient *ethclient.Client, txOpts *bind.TransactOpts) (*ethtypes.Transaction, error) {
