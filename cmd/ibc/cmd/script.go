@@ -155,11 +155,11 @@ func scriptCmd() *cobra.Command {
 	cmd.Flags().IntVar(&numPacketsPerWallet, "packets-per-wallet", 5, "Number of packets to send per wallet")
 	cmd.Flags().IntVar(&transferAmount, "transfer-amount", 100, "Amount to transfer")
 	cmd.Flags().StringVar(&chainAId, "chain-a-id", "11155111", "Chain A ID")
-	cmd.Flags().StringVar(&chainAClientId, "chain-a-client-id", "hub-testnet-0", "Chain A client ID")
+	cmd.Flags().StringVar(&chainAClientId, "chain-a-client-id", "hub-testnet-1", "Chain A client ID")
 	cmd.Flags().StringVar(&chainADenom, "chain-a-denom", "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14", "Chain A denom")
 	cmd.Flags().StringVar(&chainARelayerWalletId, "chain-a-relayer-wallet-id", "eth-relayer", "Chain A relayer wallet ID")
 	cmd.Flags().StringVar(&chainBId, "chain-b-id", "provider", "Chain B ID")
-	cmd.Flags().StringVar(&chainBClientId, "chain-b-client-id", "08-wasm-262", "Chain B client ID")
+	cmd.Flags().StringVar(&chainBClientId, "chain-b-client-id", "08-wasm-274", "Chain B client ID")
 	cmd.Flags().StringVar(&chainBDenom, "chain-b-denom", "uatom", "Chain B denom")
 	cmd.Flags().StringVar(&chainBRelayerWalletId, "chain-b-relayer-wallet-id", "cosmos-relayer", "Chain B relayer wallet ID")
 	cmd.Flags().BoolVar(&selfRelay, "self-relay", false, "Manually relay packets")
@@ -227,6 +227,14 @@ func run(
 			if update.TotalTransfers > 0 {
 				relayingStatusModelAToB.UpdateProgress(int(update.CompletedRelaying * 100 / update.TotalTransfers))
 			}
+		case loadscript.ErrorUpdate:
+			transferStatusModelAToB.UpdateStatus(fmt.Sprintf("Error transferring from %s to %s: %s",
+				update.FromChain, update.ToChain, update.ErrorMessage))
+			transferStatusModelAToB.UpdateProgress(0)
+			relayingStatusModelAToB.UpdateStatus(fmt.Sprintf("Error relaying from %s to %s: %s",
+				update.FromChain, update.ToChain, update.ErrorMessage))
+			relayingStatusModelAToB.UpdateProgress(0)
+			return nil
 		case loadscript.DoneUpdate:
 			transferStatusModelAToB.UpdateStatus(fmt.Sprintf("Transfers completed from %s to %s",
 				update.FromChain, update.ToChain))

@@ -135,7 +135,7 @@ func WaitForReceipt(ctx context.Context, ethClient *ethclient.Client, hash ethco
 
 		return receipt != nil, nil
 	}); err != nil {
-		return nil, errors.Wrap(err, "failed to wait for transaction receipt")
+		return nil, errors.Wrapf(err, "failed to wait for transaction receipt for tx %s", hash.String())
 	}
 
 	return receipt, nil
