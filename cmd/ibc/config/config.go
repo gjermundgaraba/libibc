@@ -106,7 +106,7 @@ func (c *Config) SaveConfig(configPath string) error {
 	return nil
 }
 
-func (c *Config) ToNetwork(ctx context.Context, logger *zap.Logger) (*network.Network, error) {
+func (c *Config) ToNetwork(ctx context.Context, logger *zap.Logger, extraGwei int64) (*network.Network, error) {
 	walletConfigs := make(map[string]WalletConfig)
 	for _, walletConfig := range c.Wallets {
 		walletConfigs[walletConfig.WalletID] = walletConfig
@@ -125,10 +125,12 @@ func (c *Config) ToNetwork(ctx context.Context, logger *zap.Logger) (*network.Ne
 				return nil, errors.Wrap(err, "failed to create Cosmos chain")
 			}
 		case "ethereum":
-			chain, err = ethereum.NewEthereum(ctx, logger, chainConfig.ChainID, chainConfig.RPCAddr, chainConfig.ICS26Address, chainConfig.RelayerHelperAddress)
+			ethChain, err := ethereum.NewEthereum(ctx, logger, chainConfig.ChainID, chainConfig.RPCAddr, chainConfig.ICS26Address, chainConfig.RelayerHelperAddress)
 			if err != nil {
 				return nil, errors.Wrap(err, "failed to create Ethereum chain")
 			}
+			ethChain.SetExtraGwei(extraGwei)
+			chain = ethChain
 		default:
 			panic(fmt.Sprintf("unsupported chain type: %s", chainConfig.ChainType))
 		}

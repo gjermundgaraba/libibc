@@ -13,6 +13,7 @@ var (
 	configPath string
 	cfg        *config.Config
 	logLevel   string
+	extraGwei  int64
 
 	logger    *zap.Logger
 	logWriter *logging.IBCLogWriter
@@ -36,6 +37,7 @@ func NewRootCmd() *cobra.Command {
 
 	rootCmd.PersistentFlags().StringVar(&configPath, "config", "config.toml", "config file path")
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info", "log level (debug, info, warn, error)")
+	rootCmd.PersistentFlags().Int64Var(&extraGwei, "extra-gwei", 0, "extra gwei to add to gas price")
 
 	rootCmd.AddCommand(
 		traceCmd(),

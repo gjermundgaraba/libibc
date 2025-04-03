@@ -24,12 +24,16 @@ func distributeCmd() *cobra.Command {
 			senderWalletID := args[1]
 			denom := args[2]
 
+			logWriter.AddExtraLogger(func(entry string) {
+				cmd.Println(entry)
+			})
+
 			minimumAmount, success := new(big.Int).SetString(args[3], 10)
 			if !success {
 				return errors.New("invalid minimum amount, must be a valid integer")
 			}
 
-			network, err := cfg.ToNetwork(ctx, logger)
+			network, err := cfg.ToNetwork(ctx, logger, extraGwei)
 			if err != nil {
 				return errors.Wrap(err, "failed to build network")
 			}

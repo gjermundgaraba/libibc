@@ -41,7 +41,7 @@ func scriptCmd() *cobra.Command {
 			ctx := cmd.Context()
 			tuiInstance := tui.NewTui(logWriter, "Starting script", "Initializing")
 
-			network, err := cfg.ToNetwork(ctx, logger)
+			network, err := cfg.ToNetwork(ctx, logger, extraGwei)
 			if err != nil {
 				return errors.Wrap(err, "failed to build network")
 			}

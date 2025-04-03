@@ -31,6 +31,7 @@ type Ethereum struct {
 	ics26Address         ethcommon.Address
 	ics20Address         ethcommon.Address
 	relayerHelperAddress ethcommon.Address
+	extraGwei            int64
 }
 
 func NewEthereumWithDeploy(
@@ -131,7 +132,10 @@ func newNonIBCEthereum(ctx context.Context, logger *zap.Logger, chainID string, 
 
 		// The ibc related fields should be set by the caller
 	}, nil
+}
 
+func (e *Ethereum) SetExtraGwei(extraGwei int64) {
+	e.extraGwei = extraGwei
 }
 
 // GetChainID implements network.Chain.

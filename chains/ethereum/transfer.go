@@ -75,11 +75,11 @@ func (e *Ethereum) SendTransfer(
 		Memo:             memo,
 	}
 
-	receipt, err := e.Transact(ctx, ethereumWallet, func(ethClient *ethclient.Client, txOpts *bind.TransactOpts) (*ethtypes.Transaction, error) {
+	receipt, err := e.Transact(ctx, ethereumWallet, func(_ *ethclient.Client, txOpts *bind.TransactOpts) (*ethtypes.Transaction, error) {
 		return ics20Contract.SendTransfer(txOpts, sendTransferMsg)
 	})
 	if err != nil {
-		return ibc.Packet{}, errors.Wrap(err, "failed to send transfer")
+		return ibc.Packet{}, errors.Wrapf(err, "failed to send transfer on ICS20Transfer address %s with sendTransferMsg: %+v", e.ics20Address.String(), sendTransferMsg)
 	}
 
 	packets, err := e.GetPackets(ctx, receipt.TxHash.String())

@@ -15,7 +15,11 @@ func traceCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 
-			network, err := cfg.ToNetwork(ctx, logger)
+			logWriter.AddExtraLogger(func(entry string) {
+				cmd.Println(entry)
+			})
+
+			network, err := cfg.ToNetwork(ctx, logger, extraGwei)
 			if err != nil {
 				return errors.Wrap(err, "failed to build network")
 			}

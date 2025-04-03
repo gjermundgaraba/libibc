@@ -23,6 +23,10 @@ func generateWalletCmd() *cobra.Command {
 			chainID := args[0]
 			newWalletID := args[1]
 
+			logWriter.AddExtraLogger(func(entry string) {
+				cmd.Println(entry)
+			})
+
 			if (fundFromWalletId == "") != (fundAmount == "") {
 				return errors.New("either both --fund-from-wallet and --fund-amount must be set or neither")
 			}
@@ -36,7 +40,7 @@ func generateWalletCmd() *cobra.Command {
 				}
 			}
 
-			network, err := cfg.ToNetwork(ctx, logger)
+			network, err := cfg.ToNetwork(ctx, logger, extraGwei)
 			if err != nil {
 				return errors.Wrap(err, "failed to build network")
 			}

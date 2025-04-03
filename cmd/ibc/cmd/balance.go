@@ -37,7 +37,7 @@ or ERC20 contract address for token balances.`,
 				return errors.New("either wallet-id flag or address argument must be provided")
 			}
 
-			network, err := cfg.ToNetwork(ctx, logger)
+			network, err := cfg.ToNetwork(ctx, logger, extraGwei)
 			if err != nil {
 				return errors.Wrap(err, "failed to build network")
 			}

@@ -20,7 +20,7 @@ func relayCmd() *cobra.Command {
 				cmd.Println(entry)
 			})
 
-			network, err := cfg.ToNetwork(ctx, logger)
+			network, err := cfg.ToNetwork(ctx, logger, extraGwei)
 			if err != nil {
 				return errors.Wrap(err, "failed to build network")
 			}

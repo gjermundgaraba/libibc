@@ -61,19 +61,19 @@ func (e *Ethereum) Transact(ctx context.Context, wallet *Wallet, doTx func(*ethc
 		return nil, errors.Wrap(err, "failed to dial ethereum client")
 	}
 
-	txOpts, err := GetTransactOpts(ctx, ethClient, e.actualChainID, wallet.privateKey, 5)
+	txOpts, err := GetTransactOpts(ctx, ethClient, e.actualChainID, wallet.privateKey, e.extraGwei)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get transact opts")
 	}
 
 	tx, err := doTx(ethClient, txOpts)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to do transaction")
+		return nil, errors.Wrapf(err, "failed to do transaction with txOpts: %+v, using extraGwei: %d (tx, if any): %+v", txOpts, e.extraGwei, tx)
 	}
 
 	receipt, err := WaitForReceipt(ctx, ethClient, tx.Hash())
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to get receipt")
+		return nil, errors.Wrapf(err, "failed to get receipt for tx %s", tx.Hash().String())
 	}
 
 	if receipt.Status != ethtypes.ReceiptStatusSuccessful {

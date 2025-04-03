@@ -37,7 +37,7 @@ func transferCmd() *cobra.Command {
 			toAddress := args[6]
 			memo := args[7]
 
-			networkConfig, err := cfg.ToNetwork(ctx, logger)
+			networkConfig, err := cfg.ToNetwork(ctx, logger, extraGwei)
 			if err != nil {
 				return errors.Wrap(err, "failed to build network")
 			}
