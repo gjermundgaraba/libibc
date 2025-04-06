@@ -16,21 +16,25 @@ import (
 var _ network.Chain = &Cosmos{}
 
 type Cosmos struct {
-	ChainID string
-	Clients map[string]network.ClientCounterparty
-	Wallets map[string]Wallet
+	ChainID      string
+	Clients      map[string]network.ClientCounterparty
+	Wallets      map[string]Wallet
+	Bech32Prefix string
+	GasDenom     string
 
 	grpcAddr string
 	codec    codec.Codec
 	logger   *zap.Logger
 }
 
-func NewCosmos(logger *zap.Logger, chainID string, grpc string) (*Cosmos, error) {
+func NewCosmos(logger *zap.Logger, chainID string, bech32Prefix string, gasDenom string, grpc string) (*Cosmos, error) {
 	codec := SetupCodec()
 	return &Cosmos{
-		ChainID: chainID,
-		Clients: make(map[string]network.ClientCounterparty),
-		Wallets: make(map[string]Wallet),
+		ChainID:      chainID,
+		Clients:      make(map[string]network.ClientCounterparty),
+		Wallets:      make(map[string]Wallet),
+		Bech32Prefix: bech32Prefix,
+		GasDenom:     gasDenom,
 
 		grpcAddr: grpc,
 		codec:    codec,

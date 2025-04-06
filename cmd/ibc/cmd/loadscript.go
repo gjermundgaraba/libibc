@@ -9,71 +9,88 @@ import (
 	"github.com/gjermundgaraba/libibc/chains/network"
 	"github.com/gjermundgaraba/libibc/cmd/ibc/loadscript"
 	"github.com/gjermundgaraba/libibc/cmd/ibc/tui"
+	"github.com/pelletier/go-toml"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 )
 
+type LoadScriptConfig struct {
+	ChainAId              string `toml:"chain-a-id"`
+	ChainAClientId        string `toml:"chain-a-client-id"`
+	ChainADenom           string `toml:"chain-a-denom"`
+	ChainATransferAmount  int    `toml:"chain-a-transfer-amount"`
+	ChainARelayerWalletId string `toml:"chain-a-relayer-wallet-id"`
+
+	ChainBId              string `toml:"chain-b-id"`
+	ChainBClientId        string `toml:"chain-b-client-id"`
+	ChainBDenom           string `toml:"chain-b-denom"`
+	ChainBRelayerWalletId string `toml:"chain-b-relayer-wallet-id"`
+	ChainBTransferAmount  int    `toml:"chain-b-transfer-amount"`
+
+	NumPacketsPerWallet int  `toml:"num-packets-per-wallet"`
+	MaxWallets          int  `toml:"max-wallets"`
+	SelfRelay           bool `toml:"self-relay"`
+}
+
 func scriptCmd() *cobra.Command {
-	var (
-		maxWallets          int
-		numPacketsPerWallet int
-		transferAmount      int
-
-		chainAId              string
-		chainAClientId        string
-		chainADenom           string
-		chainARelayerWalletId string
-
-		chainBId              string
-		chainBClientId        string
-		chainBDenom           string
-		chainBRelayerWalletId string
-
-		selfRelay bool
-	)
-
 	cmd := &cobra.Command{
-		Use:   "script",
-		Short: "Run a script",
+		Use:   "load-script [load-config-file]",
+		Short: "Run a load testing script using a load config file",
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			tuiInstance := tui.NewTui(logWriter, "Starting script", "Initializing")
+
+			configPath := args[0]
+
+			file, err := os.Open(configPath)
+			if err != nil {
+				return errors.Wrapf(err, "failed to open config file")
+			}
+			defer file.Close()
+
+			var config LoadScriptConfig
+			if err := toml.NewDecoder(file).Decode(&config); err != nil {
+				return errors.Wrapf(err, "failed to decode config")
+			}
 
 			network, err := cfg.ToNetwork(ctx, logger, extraGwei)
 			if err != nil {
 				return errors.Wrap(err, "failed to build network")
 			}
 
-			transferAmountBig := big.NewInt(int64(transferAmount))
-			chainA, err := network.GetChain(chainAId)
+			chainATransferAmount := big.NewInt(int64(config.ChainATransferAmount))
+			chainBTransferAmount := big.NewInt(int64(config.ChainBTransferAmount))
+
+			chainA, err := network.GetChain(config.ChainAId)
 			if err != nil {
-				return errors.Wrapf(err, "failed to get chain %s", chainAId)
+				return errors.Wrapf(err, "failed to get chain %s", config.ChainAId)
 			}
-			chainB, err := network.GetChain(chainBId)
+			chainB, err := network.GetChain(config.ChainBId)
 			if err != nil {
-				return errors.Wrapf(err, "failed to get chain %s", chainBId)
+				return errors.Wrapf(err, "failed to get chain %s", config.ChainBId)
 			}
 
-			chainARelayerWallet, err := chainA.GetWallet(chainARelayerWalletId)
+			chainARelayerWallet, err := chainA.GetWallet(config.ChainARelayerWalletId)
 			if err != nil {
-				return errors.Wrapf(err, "failed to get wallet %s", chainARelayerWalletId)
+				return errors.Wrapf(err, "failed to get wallet %s", config.ChainARelayerWalletId)
 			}
 
-			chainBRelayerWallet, err := chainB.GetWallet(chainBRelayerWalletId)
+			chainBRelayerWallet, err := chainB.GetWallet(config.ChainBRelayerWalletId)
 			if err != nil {
-				return errors.Wrapf(err, "failed to get wallet %s", chainBRelayerWalletId)
+				return errors.Wrapf(err, "failed to get wallet %s", config.ChainBRelayerWalletId)
 			}
 
 			chainBWallets := chainB.GetWallets()
 			chainAWallets := chainA.GetWallets()
 
-			if len(chainBWallets) > maxWallets {
-				chainBWallets = chainBWallets[:maxWallets]
+			if len(chainBWallets) > config.MaxWallets {
+				chainBWallets = chainBWallets[:config.MaxWallets]
 			}
-			if len(chainAWallets) > maxWallets {
-				chainAWallets = chainAWallets[:maxWallets]
+			if len(chainAWallets) > config.MaxWallets {
+				chainAWallets = chainAWallets[:config.MaxWallets]
 			}
 
 			if len(chainBWallets) != len(chainAWallets) {
@@ -101,15 +118,15 @@ func scriptCmd() *cobra.Command {
 						logger,
 						network,
 						chainA,
-						chainAClientId,
-						chainADenom,
+						config.ChainAClientId,
+						config.ChainADenom,
 						chainAWallets,
 						chainB,
 						chainBWallets,
 						chainBRelayerWallet,
-						transferAmountBig,
-						numPacketsPerWallet,
-						selfRelay,
+						chainATransferAmount,
+						config.NumPacketsPerWallet,
+						config.SelfRelay,
 					)
 				})
 
@@ -120,15 +137,15 @@ func scriptCmd() *cobra.Command {
 						logger,
 						network,
 						chainB,
-						chainBClientId,
-						chainBDenom,
+						config.ChainBClientId,
+						config.ChainBDenom,
 						chainBWallets,
 						chainA,
 						chainAWallets,
 						chainARelayerWallet,
-						transferAmountBig,
-						numPacketsPerWallet,
-						selfRelay,
+						chainBTransferAmount,
+						config.NumPacketsPerWallet,
+						config.SelfRelay,
 					)
 				})
 
@@ -150,19 +167,6 @@ func scriptCmd() *cobra.Command {
 			return nil
 		},
 	}
-
-	cmd.Flags().IntVar(&maxWallets, "max-wallets", 5, "Maximum number of wallets to use")
-	cmd.Flags().IntVar(&numPacketsPerWallet, "packets-per-wallet", 5, "Number of packets to send per wallet")
-	cmd.Flags().IntVar(&transferAmount, "transfer-amount", 100, "Amount to transfer")
-	cmd.Flags().StringVar(&chainAId, "chain-a-id", "11155111", "Chain A ID")
-	cmd.Flags().StringVar(&chainAClientId, "chain-a-client-id", "hub-testnet-1", "Chain A client ID")
-	cmd.Flags().StringVar(&chainADenom, "chain-a-denom", "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14", "Chain A denom")
-	cmd.Flags().StringVar(&chainARelayerWalletId, "chain-a-relayer-wallet-id", "eth-relayer", "Chain A relayer wallet ID")
-	cmd.Flags().StringVar(&chainBId, "chain-b-id", "provider", "Chain B ID")
-	cmd.Flags().StringVar(&chainBClientId, "chain-b-client-id", "08-wasm-274", "Chain B client ID")
-	cmd.Flags().StringVar(&chainBDenom, "chain-b-denom", "uatom", "Chain B denom")
-	cmd.Flags().StringVar(&chainBRelayerWalletId, "chain-b-relayer-wallet-id", "cosmos-relayer", "Chain B relayer wallet ID")
-	cmd.Flags().BoolVar(&selfRelay, "self-relay", false, "Manually relay packets")
 
 	return cmd
 }

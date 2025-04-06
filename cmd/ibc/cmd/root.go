@@ -10,10 +10,10 @@ import (
 )
 
 var (
-	configPath string
-	cfg        *config.Config
-	logLevel   string
-	extraGwei  int64
+	networkConfigPath string
+	cfg               *config.Config
+	logLevel          string
+	extraGwei         int64
 
 	logger    *zap.Logger
 	logWriter *logging.IBCLogWriter
@@ -25,7 +25,7 @@ func NewRootCmd() *cobra.Command {
 		Short: "IBC CLI tool",
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			var err error
-			cfg, err = config.LoadConfig(configPath)
+			cfg, err = config.LoadConfig(networkConfigPath)
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
@@ -35,7 +35,7 @@ func NewRootCmd() *cobra.Command {
 		},
 	}
 
-	rootCmd.PersistentFlags().StringVar(&configPath, "config", "config.toml", "config file path")
+	rootCmd.PersistentFlags().StringVar(&networkConfigPath, "config", "config.toml", "config file path")
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info", "log level (debug, info, warn, error)")
 	rootCmd.PersistentFlags().Int64Var(&extraGwei, "extra-gwei", 0, "extra gwei to add to gas price")
 

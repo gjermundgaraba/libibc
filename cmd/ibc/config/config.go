@@ -30,6 +30,12 @@ type ChainConfig struct {
 	Clients   []ClientConfig `toml:"clients"`
 	WalletIDs []string       `toml:"wallet-ids"`
 
+	// TODO: Find a way to put chain specific fields somwhere else?
+
+	// Cosmos specific fields
+	Bech32Prefix string `toml:"bech32-prefix"`
+	GasDenom     string `toml:"gas-denom"`
+
 	// Ethereum specific fields
 	ICS26Address         string `toml:"ics26-address"`
 	RelayerHelperAddress string `toml:"relayer-helper-address"`
@@ -120,7 +126,7 @@ func (c *Config) ToNetwork(ctx context.Context, logger *zap.Logger, extraGwei in
 		)
 		switch chainConfig.ChainType {
 		case "cosmos":
-			chain, err = cosmos.NewCosmos(logger, chainConfig.ChainID, chainConfig.GRPCAddr)
+			chain, err = cosmos.NewCosmos(logger, chainConfig.ChainID, chainConfig.Bech32Prefix, chainConfig.GasDenom, chainConfig.GRPCAddr)
 			if err != nil {
 				return nil, errors.Wrap(err, "failed to create Cosmos chain")
 			}

@@ -89,7 +89,7 @@ func generateWalletCmd() *cobra.Command {
 				})
 			}
 
-			if err := cfg.SaveConfig(configPath); err != nil {
+			if err := cfg.SaveConfig(networkConfigPath); err != nil {
 				return errors.Wrap(err, "failed to save config")
 			}
 
@@ -120,7 +120,7 @@ func generateWalletCmd() *cobra.Command {
 			logger.Info("Wallet generation completed successfully",
 				zap.String("wallet_id", newWalletID),
 				zap.String("chain_id", chainID),
-				zap.String("config_file", configPath))
+				zap.String("config_file", networkConfigPath))
 
 			return nil
 		},
