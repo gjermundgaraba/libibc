@@ -86,6 +86,10 @@ func (c *Client) GetTransferTxs(ctx context.Context, srcDenom string, fromChainI
 	}
 
 	// TODO: depending on msgsResp.Txs, we need to convert it to the correct byte format that can be used by the chain in question
+	// The []byte needs to be in the same format that is outputed by the eureka API.
+	// In other words, for cosmos, it needs to be marshalled as a txtypes.TxBody
+	// And for etheruem, it needs to be the data that goes into the transaction
+
 	_ = msgsResp
 	return nil, nil
 }

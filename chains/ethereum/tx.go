@@ -18,7 +18,7 @@ import (
 )
 
 // SubmitTx implements network.Chain.
-func (e *Ethereum) SubmitTx(ctx context.Context, txBz []byte, wallet network.Wallet) (string, error) {
+func (e *Ethereum) SubmitTx(ctx context.Context, txBz []byte, contract ethcommon.Address, wallet network.Wallet) (string, error) {
 	ethereumWallet, ok := wallet.(*Wallet)
 	if !ok {
 		return "", errors.Errorf("invalid wallet type: %T", wallet)
@@ -27,7 +27,7 @@ func (e *Ethereum) SubmitTx(ctx context.Context, txBz []byte, wallet network.Wal
 	receipt, err := e.Transact(ctx, ethereumWallet, func(ethClient *ethclient.Client, txOpts *bind.TransactOpts) (*ethtypes.Transaction, error) {
 		unsignedTx := ethtypes.NewTransaction(
 			txOpts.Nonce.Uint64(),
-			e.ics26Address,
+			contract,
 			new(big.Int).SetUint64(0),
 			15_000_000,
 			txOpts.GasPrice,

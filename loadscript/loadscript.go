@@ -7,6 +7,8 @@ import (
 	"sync"
 
 	skipapi "github.com/gjermundgaraba/libibc/apis/skip-api"
+	"github.com/gjermundgaraba/libibc/chains/cosmos"
+	"github.com/gjermundgaraba/libibc/chains/ethereum"
 	"github.com/gjermundgaraba/libibc/chains/network"
 	"github.com/gjermundgaraba/libibc/ibc"
 	"github.com/gjermundgaraba/libibc/relayer"
@@ -217,9 +219,23 @@ func transfer(ctx context.Context, logger *zap.Logger, chain network.Chain, srcC
 			return ibc.Packet{}, errors.Wrapf(err, "failed to get transfer txs from %s to %s", chain.GetChainID(), chain.GetChainID())
 		}
 
-		txHash, err := chain.SubmitTx(ctx, txBz, wallet)
-		if err != nil {
-			return ibc.Packet{}, errors.Wrapf(err, "failed to submit transfer tx from %s to %s", chain.GetChainID(), chain.GetChainID())
+		var txHash string
+		switch chain.GetChainType() {
+		case network.ChainTypeCosmos:
+			cosmosChain := chain.(*cosmos.Cosmos)
+			txHash, err = cosmosChain.SubmitTx(ctx, txBz, wallet)
+			if err != nil {
+				return ibc.Packet{}, errors.Wrapf(err, "failed to submit transfer tx from %s to %s", chain.GetChainID(), chain.GetChainID())
+			}
+		case network.ChainTypeEthereum:
+			ethChain := chain.(*ethereum.Ethereum)
+			ics26Address := ethChain.GetICS26Address()
+			txHash, err = ethChain.SubmitTx(ctx, txBz, ics26Address, wallet)
+			if err != nil {
+				return ibc.Packet{}, errors.Wrapf(err, "failed to submit transfer tx from %s to %s", chain.GetChainID(), chain.GetChainID())
+			}
+		default:
+			return ibc.Packet{}, errors.Errorf("unsupported chain type %s", chain.GetChainType())
 		}
 
 		packets, err := chain.GetPackets(ctx, txHash)

@@ -143,6 +143,15 @@ func (e *Ethereum) GetChainID() string {
 	return e.ChainID
 }
 
+// GetChainType implements network.Chain.
+func (e *Ethereum) GetChainType() network.ChainType {
+	return network.ChainTypeEthereum
+}
+
+func (e *Ethereum) GetICS26Address() ethcommon.Address {
+	return e.ics26Address
+}
+
 // AddClient implements network.Chain.
 func (e *Ethereum) AddClient(clientID string, counterparty network.ClientCounterparty) {
 	e.Clients[clientID] = counterparty

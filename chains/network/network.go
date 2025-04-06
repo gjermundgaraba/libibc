@@ -10,6 +10,13 @@ import (
 	"go.uber.org/zap"
 )
 
+type ChainType string
+
+const (
+	ChainTypeCosmos   ChainType = "cosmos"
+	ChainTypeEthereum ChainType = "ethereum"
+)
+
 type Network struct {
 	logger      *zap.Logger
 	chains      map[string]Chain
@@ -23,6 +30,7 @@ type ClientCounterparty struct {
 
 type Chain interface {
 	GetChainID() string
+	GetChainType() ChainType
 
 	AddWallet(walletID string, privateKeyHex string) error
 	GetWallet(walletID string) (Wallet, error)
@@ -36,7 +44,6 @@ type Chain interface {
 	GetPackets(ctx context.Context, txHash string) ([]ibc.Packet, error)
 	IsPacketReceived(ctx context.Context, packet ibc.Packet) (bool, error)
 
-	SubmitTx(ctx context.Context, txBz []byte, wallet Wallet) (string, error)
 	SendTransfer(ctx context.Context, clientID string, wallet Wallet, amount *big.Int, denom string, to string, memo string) (ibc.Packet, error)
 	Send(ctx context.Context, wallet Wallet, amount *big.Int, denom string, toAddress string) (string, error)
 	GetBalance(ctx context.Context, address string, denom string) (*big.Int, error)

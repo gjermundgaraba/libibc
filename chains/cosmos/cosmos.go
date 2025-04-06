@@ -47,6 +47,11 @@ func (c *Cosmos) GetChainID() string {
 	return c.ChainID
 }
 
+// GetChainType implements network.Chain.
+func (c *Cosmos) GetChainType() network.ChainType {
+	return network.ChainTypeCosmos
+}
+
 // AddClient implements network.Chain.
 func (c *Cosmos) AddClient(clientID string, counterparty network.ClientCounterparty) {
 	c.Clients[clientID] = counterparty

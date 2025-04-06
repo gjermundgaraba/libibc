@@ -1,0 +1,18 @@
+# Chain A configuration
+chain-a-id = "provider"
+chain-a-client-id = "08-wasm-274"
+chain-a-denom = "uatom"
+chain-a-transfer-amount = 42
+chain-a-relayer-wallet-id = "cosmos-relayer"
+
+# Chain B configuration
+chain-b-id = "11155111"
+chain-b-client-id = "hub-testnet-1"
+chain-b-denom = "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14"
+chain-b-transfer-amount = 2
+chain-b-relayer-wallet-id = "eth-relayer"
+
+# General configuration
+num-packets-per-wallet = 1
+max-wallets = 1
+self-relay = true

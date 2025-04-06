@@ -4,6 +4,9 @@ import (
 	"context"
 
 	"github.com/gjermundgaraba/libibc/apis/eurekarelayerapi"
+	"github.com/gjermundgaraba/libibc/chains/cosmos"
+	"github.com/gjermundgaraba/libibc/chains/ethereum"
+	"github.com/gjermundgaraba/libibc/chains/network"
 	"github.com/gjermundgaraba/libibc/ibc"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
@@ -27,7 +30,21 @@ func (rq *RelayerQueue) relayByEurekaAPI(ctx context.Context, packets []ibc.Pack
 	}
 	rq.logger.Debug("RelayByTx response", zap.Any("resp", resp))
 
-	rq.destinationChain.SubmitTx(ctx, resp.Tx, rq.relayerWallet)
+	switch rq.destinationChain.GetChainType() {
+	case network.ChainTypeCosmos:
+		cosmosChain := rq.destinationChain.(*cosmos.Cosmos)
+		if _, err := cosmosChain.SubmitTx(ctx, resp.Tx, rq.relayerWallet); err != nil {
+			return errors.Wrapf(err, "failed to submit tx %s to chain %s", resp.Tx, rq.destinationChain.GetChainID())
+		}
+	case network.ChainTypeEthereum:
+		ethChain := rq.destinationChain.(*ethereum.Ethereum)
+		ics26Address := ethChain.GetICS26Address()
+		if _, err := ethChain.SubmitTx(ctx, resp.Tx, ics26Address, rq.relayerWallet); err != nil {
+			return errors.Wrapf(err, "failed to submit tx %s to chain %s", resp.Tx, rq.destinationChain.GetChainID())
+		}
+	default:
+		return errors.Errorf("unsupported chain type %s", rq.destinationChain.GetChainType())
+	}
 
 	rq.logger.Info("Finished relaying packets", zap.Strings("tx_ids", txIDs), zap.String("source_chain", rq.sourceChain.GetChainID()), zap.String("destination_chain", rq.destinationChain.GetChainID()), zap.String("destination_client", dstClientID), zap.Any("relayer-address", rq.relayerWallet.Address()))
 
