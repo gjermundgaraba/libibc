@@ -1,12 +1,12 @@
-relayer-grpc-addr = "localhost:3000"
+eureka-api-addr = "localhost:3000"
+skip-api-addr = "https://api.skip.money"
 
 [[chains]]
   chain-id = "cosmoshub-4"
   chain-type = "cosmos"
   grpc-addr = "cosmos-grpc.polkachu.com:14990"
-  ics26-address = ""
-  relayer-helper-address = ""
-  rpc-addr = ""
+  bech32-prefix = "cosmos"
+  gas-denom = "uatom"
   wallet-ids = ["cosmos-1", "cosmos-relayer"]
 
   [[chains.clients]]
@@ -17,7 +17,6 @@ relayer-grpc-addr = "localhost:3000"
 [[chains]]
   chain-id = "1"
   chain-type = "ethereum"
-  grpc-addr = ""
   ics26-address = "0x3aF134307D5Ee90faa2ba9Cdba14ba66414CF1A7"
   relayer-helper-address = "0x3fcBB8b5d85FB5F77603e11536b5E90FeE37e6c0"
   rpc-addr = "TODO"

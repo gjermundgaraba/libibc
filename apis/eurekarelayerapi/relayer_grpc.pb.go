@@ -4,7 +4,7 @@
 // - protoc             (unknown)
 // source: relayer/relayer.proto
 
-package relayer
+package eurekarelayerapi
 
 import (
 	context "context"
@@ -169,3 +169,4 @@ var RelayerService_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "relayer/relayer.proto",
 }
+

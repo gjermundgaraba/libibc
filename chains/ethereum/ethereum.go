@@ -143,9 +143,28 @@ func (e *Ethereum) GetChainID() string {
 	return e.ChainID
 }
 
+// GetChainType implements network.Chain.
+func (e *Ethereum) GetChainType() network.ChainType {
+	return network.ChainTypeEthereum
+}
+
+func (e *Ethereum) GetICS26Address() ethcommon.Address {
+	return e.ics26Address
+}
+
 // AddClient implements network.Chain.
 func (e *Ethereum) AddClient(clientID string, counterparty network.ClientCounterparty) {
 	e.Clients[clientID] = counterparty
+}
+
+// GetCounterpartyClient implements network.Chain.
+func (e *Ethereum) GetCounterpartyClient(clientID string) (network.ClientCounterparty, error) {
+	counterparty, ok := e.Clients[clientID]
+	if !ok {
+		return network.ClientCounterparty{}, errors.Errorf("client %s not found", clientID)
+	}
+
+	return counterparty, nil
 }
 
 // GetClients implements network.Chain.

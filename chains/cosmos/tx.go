@@ -22,7 +22,7 @@ import (
 )
 
 // SubmitTx implements network.Chain.
-func (c *Cosmos) SubmitRelayTx(ctx context.Context, txBz []byte, wallet network.Wallet) (string, error) {
+func (c *Cosmos) SubmitTx(ctx context.Context, txBz []byte, wallet network.Wallet) (string, error) {
 	cosmosWallet, ok := wallet.(*Wallet)
 	if !ok {
 		return "", errors.Errorf("invalid wallet type: %T", wallet)
@@ -73,7 +73,7 @@ func (c *Cosmos) submitTx(ctx context.Context, wallet *Wallet, gas uint64, msgs 
 	txBuilder := txCfg.NewTxBuilder()
 	txBuilder.SetGasLimit(gas)
 	txBuilder.SetMsgs(msgs...)
-	txBuilder.SetFeeAmount(sdk.NewCoins(sdk.NewInt64Coin("uatom", int64(gas))))
+	txBuilder.SetFeeAmount(sdk.NewCoins(sdk.NewInt64Coin(c.GasDenom, int64(gas))))
 
 	sigV2 := signing.SignatureV2{
 		PubKey: wallet.privateKey.PubKey(),

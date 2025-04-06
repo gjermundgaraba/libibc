@@ -8,7 +8,6 @@ import (
 	"github.com/gjermundgaraba/libibc/chains/cosmos"
 	"github.com/gjermundgaraba/libibc/chains/ethereum"
 	"github.com/gjermundgaraba/libibc/chains/network"
-	"github.com/gjermundgaraba/libibc/cmd/ibc/relayer"
 	"github.com/pelletier/go-toml"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
@@ -16,9 +15,10 @@ import (
 
 // Config represents the application configuration
 type Config struct {
-	Chains          []ChainConfig  `toml:"chains"`
-	Wallets         []WalletConfig `toml:"wallets"`
-	RelayerGRPCAddr string         `toml:"relayer-grpc-addr"`
+	Chains        []ChainConfig  `toml:"chains"`
+	Wallets       []WalletConfig `toml:"wallets"`
+	EurekaAPIAddr string         `toml:"eureka-api-addr"`
+	SkipAPIAddr   string         `toml:"skip-api-addr"`
 }
 
 // ChainConfig represents the configuration for a single chain
@@ -29,6 +29,12 @@ type ChainConfig struct {
 	GRPCAddr  string         `toml:"grpc-addr"`
 	Clients   []ClientConfig `toml:"clients"`
 	WalletIDs []string       `toml:"wallet-ids"`
+
+	// TODO: Find a way to put chain specific fields somwhere else?
+
+	// Cosmos specific fields
+	Bech32Prefix string `toml:"bech32-prefix"`
+	GasDenom     string `toml:"gas-denom"`
 
 	// Ethereum specific fields
 	ICS26Address         string `toml:"ics26-address"`
@@ -120,7 +126,7 @@ func (c *Config) ToNetwork(ctx context.Context, logger *zap.Logger, extraGwei in
 		)
 		switch chainConfig.ChainType {
 		case "cosmos":
-			chain, err = cosmos.NewCosmos(logger, chainConfig.ChainID, chainConfig.GRPCAddr)
+			chain, err = cosmos.NewCosmos(logger, chainConfig.ChainID, chainConfig.Bech32Prefix, chainConfig.GasDenom, chainConfig.GRPCAddr)
 			if err != nil {
 				return nil, errors.Wrap(err, "failed to create Cosmos chain")
 			}
@@ -154,9 +160,7 @@ func (c *Config) ToNetwork(ctx context.Context, logger *zap.Logger, extraGwei in
 		}
 
 		chains = append(chains, chain)
-
 	}
 
-	relayer := relayer.NewRelayer(logger, c.RelayerGRPCAddr)
-	return network.BuildNetwork(logger, chains, relayer)
+	return network.BuildNetwork(logger, chains)
 }
