@@ -148,6 +148,16 @@ func (e *Ethereum) AddClient(clientID string, counterparty network.ClientCounter
 	e.Clients[clientID] = counterparty
 }
 
+// GetCounterpartyClient implements network.Chain.
+func (e *Ethereum) GetCounterpartyClient(clientID string) (network.ClientCounterparty, error) {
+	counterparty, ok := e.Clients[clientID]
+	if !ok {
+		return network.ClientCounterparty{}, errors.Errorf("client %s not found", clientID)
+	}
+
+	return counterparty, nil
+}
+
 // GetClients implements network.Chain.
 func (e *Ethereum) GetClients() map[string]network.ClientCounterparty {
 	return e.Clients

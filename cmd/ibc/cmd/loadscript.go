@@ -7,8 +7,8 @@ import (
 	"os"
 
 	"github.com/gjermundgaraba/libibc/chains/network"
-	"github.com/gjermundgaraba/libibc/cmd/ibc/loadscript"
 	"github.com/gjermundgaraba/libibc/cmd/ibc/tui"
+	"github.com/gjermundgaraba/libibc/loadscript"
 	"github.com/pelletier/go-toml"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -51,8 +51,8 @@ func scriptCmd() *cobra.Command {
 			}
 			defer file.Close()
 
-			var config LoadScriptConfig
-			if err := toml.NewDecoder(file).Decode(&config); err != nil {
+			var loadConfig LoadScriptConfig
+			if err := toml.NewDecoder(file).Decode(&loadConfig); err != nil {
 				return errors.Wrapf(err, "failed to decode config")
 			}
 
@@ -61,36 +61,36 @@ func scriptCmd() *cobra.Command {
 				return errors.Wrap(err, "failed to build network")
 			}
 
-			chainATransferAmount := big.NewInt(int64(config.ChainATransferAmount))
-			chainBTransferAmount := big.NewInt(int64(config.ChainBTransferAmount))
+			chainATransferAmount := big.NewInt(int64(loadConfig.ChainATransferAmount))
+			chainBTransferAmount := big.NewInt(int64(loadConfig.ChainBTransferAmount))
 
-			chainA, err := network.GetChain(config.ChainAId)
+			chainA, err := network.GetChain(loadConfig.ChainAId)
 			if err != nil {
-				return errors.Wrapf(err, "failed to get chain %s", config.ChainAId)
+				return errors.Wrapf(err, "failed to get chain %s", loadConfig.ChainAId)
 			}
-			chainB, err := network.GetChain(config.ChainBId)
+			chainB, err := network.GetChain(loadConfig.ChainBId)
 			if err != nil {
-				return errors.Wrapf(err, "failed to get chain %s", config.ChainBId)
-			}
-
-			chainARelayerWallet, err := chainA.GetWallet(config.ChainARelayerWalletId)
-			if err != nil {
-				return errors.Wrapf(err, "failed to get wallet %s", config.ChainARelayerWalletId)
+				return errors.Wrapf(err, "failed to get chain %s", loadConfig.ChainBId)
 			}
 
-			chainBRelayerWallet, err := chainB.GetWallet(config.ChainBRelayerWalletId)
+			chainARelayerWallet, err := chainA.GetWallet(loadConfig.ChainARelayerWalletId)
 			if err != nil {
-				return errors.Wrapf(err, "failed to get wallet %s", config.ChainBRelayerWalletId)
+				return errors.Wrapf(err, "failed to get wallet %s", loadConfig.ChainARelayerWalletId)
+			}
+
+			chainBRelayerWallet, err := chainB.GetWallet(loadConfig.ChainBRelayerWalletId)
+			if err != nil {
+				return errors.Wrapf(err, "failed to get wallet %s", loadConfig.ChainBRelayerWalletId)
 			}
 
 			chainBWallets := chainB.GetWallets()
 			chainAWallets := chainA.GetWallets()
 
-			if len(chainBWallets) > config.MaxWallets {
-				chainBWallets = chainBWallets[:config.MaxWallets]
+			if len(chainBWallets) > loadConfig.MaxWallets {
+				chainBWallets = chainBWallets[:loadConfig.MaxWallets]
 			}
-			if len(chainAWallets) > config.MaxWallets {
-				chainAWallets = chainAWallets[:config.MaxWallets]
+			if len(chainAWallets) > loadConfig.MaxWallets {
+				chainAWallets = chainAWallets[:loadConfig.MaxWallets]
 			}
 
 			if len(chainBWallets) != len(chainAWallets) {
@@ -118,15 +118,17 @@ func scriptCmd() *cobra.Command {
 						logger,
 						network,
 						chainA,
-						config.ChainAClientId,
-						config.ChainADenom,
+						loadConfig.ChainAClientId,
+						loadConfig.ChainADenom,
 						chainAWallets,
 						chainB,
 						chainBWallets,
 						chainBRelayerWallet,
 						chainATransferAmount,
-						config.NumPacketsPerWallet,
-						config.SelfRelay,
+						loadConfig.NumPacketsPerWallet,
+						loadConfig.SelfRelay,
+						cfg.EurekaAPIAddr,
+						cfg.SkipAPIAddr,
 					)
 				})
 
@@ -137,15 +139,17 @@ func scriptCmd() *cobra.Command {
 						logger,
 						network,
 						chainB,
-						config.ChainBClientId,
-						config.ChainBDenom,
+						loadConfig.ChainBClientId,
+						loadConfig.ChainBDenom,
 						chainBWallets,
 						chainA,
 						chainAWallets,
 						chainARelayerWallet,
 						chainBTransferAmount,
-						config.NumPacketsPerWallet,
-						config.SelfRelay,
+						loadConfig.NumPacketsPerWallet,
+						loadConfig.SelfRelay,
+						cfg.EurekaAPIAddr,
+						cfg.SkipAPIAddr,
 					)
 				})
 
@@ -186,6 +190,8 @@ func run(
 	transferAmountBig *big.Int,
 	numPacketsPerWallet int,
 	selfRelay bool,
+	eurekaAPIAddr string,
+	skipAPIAddr string,
 ) error {
 	transferStatusModelAToB := tui.NewStatusModel(fmt.Sprintf("Transferring from %s to %s 0/0", chainA.GetChainID(), chainB.GetChainID()))
 	tuiInstance.AddStatusModel(transferStatusModelAToB)
@@ -207,6 +213,8 @@ func run(
 		transferAmountBig,
 		numPacketsPerWallet,
 		selfRelay,
+		eurekaAPIAddr,
+		skipAPIAddr,
 	)
 	if err != nil {
 		return err

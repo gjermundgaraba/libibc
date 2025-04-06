@@ -47,6 +47,7 @@ func NewRootCmd() *cobra.Command {
 		generateWalletCmd(),
 		balanceCmd(),
 		transferCmd(),
+		apiCmd(),
 	)
 
 	return rootCmd

@@ -18,7 +18,7 @@ import (
 )
 
 // SubmitTx implements network.Chain.
-func (e *Ethereum) SubmitRelayTx(ctx context.Context, txBz []byte, wallet network.Wallet) (string, error) {
+func (e *Ethereum) SubmitTx(ctx context.Context, txBz []byte, wallet network.Wallet) (string, error) {
 	ethereumWallet, ok := wallet.(*Wallet)
 	if !ok {
 		return "", errors.Errorf("invalid wallet type: %T", wallet)

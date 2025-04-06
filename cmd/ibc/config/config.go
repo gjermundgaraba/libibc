@@ -8,7 +8,6 @@ import (
 	"github.com/gjermundgaraba/libibc/chains/cosmos"
 	"github.com/gjermundgaraba/libibc/chains/ethereum"
 	"github.com/gjermundgaraba/libibc/chains/network"
-	"github.com/gjermundgaraba/libibc/cmd/ibc/relayer"
 	"github.com/pelletier/go-toml"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
@@ -16,9 +15,10 @@ import (
 
 // Config represents the application configuration
 type Config struct {
-	Chains          []ChainConfig  `toml:"chains"`
-	Wallets         []WalletConfig `toml:"wallets"`
-	RelayerGRPCAddr string         `toml:"relayer-grpc-addr"`
+	Chains        []ChainConfig  `toml:"chains"`
+	Wallets       []WalletConfig `toml:"wallets"`
+	EurekaAPIAddr string         `toml:"eureka-api-addr"`
+	SkipAPIAddr   string         `toml:"skip-api-addr"`
 }
 
 // ChainConfig represents the configuration for a single chain
@@ -160,9 +160,7 @@ func (c *Config) ToNetwork(ctx context.Context, logger *zap.Logger, extraGwei in
 		}
 
 		chains = append(chains, chain)
-
 	}
 
-	relayer := relayer.NewRelayer(logger, c.RelayerGRPCAddr)
-	return network.BuildNetwork(logger, chains, relayer)
+	return network.BuildNetwork(logger, chains)
 }

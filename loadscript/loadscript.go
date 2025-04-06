@@ -6,9 +6,11 @@ import (
 	"math/big"
 	"sync"
 
-	"cosmossdk.io/errors"
+	skipapi "github.com/gjermundgaraba/libibc/apis/skip-api"
 	"github.com/gjermundgaraba/libibc/chains/network"
 	"github.com/gjermundgaraba/libibc/ibc"
+	"github.com/gjermundgaraba/libibc/relayer"
+	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 )
@@ -48,8 +50,10 @@ func TransferAndRelayFromAToB(
 	transferAmount *big.Int,
 	numPacketsPerWallet int,
 	selfRelay bool,
+	eurekaRelayerAddr string,
+	skipApiAddr string,
 ) (chan ProgressUpdate, error) {
-	relayerQueue := network.NewRelayerQueue(logger, fromChain, toChain, toChainRelayerWallet, 10, selfRelay)
+	relayerQueue := relayer.NewRelayerQueue(logger, fromChain, toChain, toChainRelayerWallet, 10, selfRelay, eurekaRelayerAddr)
 	progressCh := make(chan ProgressUpdate, 100)
 
 	aToBUpdateMutext := sync.Mutex{}
@@ -90,7 +94,7 @@ func TransferAndRelayFromAToB(
 					var packet ibc.Packet
 					if err := withRetry(func() error {
 						var err error
-						packet, err = fromChain.SendTransfer(ctx, fromClientId, chainAWallet, transferAmount, denom, chainBWallet.Address(), "")
+						packet, err = transfer(ctx, logger, fromChain, fromClientId, chainAWallet, transferAmount, denom, chainBWallet.Address(), skipApiAddr)
 						return err
 					}); err != nil {
 						reportErr(err)
@@ -203,6 +207,38 @@ func TransferAndRelayFromAToB(
 	}()
 
 	return progressCh, nil
+}
+
+func transfer(ctx context.Context, logger *zap.Logger, chain network.Chain, srcClientID string, wallet network.Wallet, amount *big.Int, denom string, to string, skipAPIAddr string) (ibc.Packet, error) {
+	if skipAPIAddr != "" {
+		skipAPIClient := skipapi.NewClient(logger, skipAPIAddr)
+		txBz, err := skipAPIClient.GetTransferTxs(ctx, denom, chain.GetChainID(), denom, chain.GetChainID(), wallet.Address(), to, amount)
+		if err != nil {
+			return ibc.Packet{}, errors.Wrapf(err, "failed to get transfer txs from %s to %s", chain.GetChainID(), chain.GetChainID())
+		}
+
+		txHash, err := chain.SubmitTx(ctx, txBz, wallet)
+		if err != nil {
+			return ibc.Packet{}, errors.Wrapf(err, "failed to submit transfer tx from %s to %s", chain.GetChainID(), chain.GetChainID())
+		}
+
+		packets, err := chain.GetPackets(ctx, txHash)
+		if err != nil {
+			return ibc.Packet{}, errors.Wrapf(err, "failed to get packets from %s to %s", chain.GetChainID(), chain.GetChainID())
+		}
+
+		if len(packets) == 0 {
+			return ibc.Packet{}, errors.New("no packets found")
+		}
+		if len(packets) > 1 {
+			return ibc.Packet{}, errors.New("multiple packets found")
+		}
+
+		return packets[0], nil
+	} else {
+		return chain.SendTransfer(ctx, srcClientID, wallet, amount, denom, to, "")
+	}
+
 }
 
 func withRetry(f func() error) error {

@@ -22,7 +22,7 @@ import (
 )
 
 // SubmitTx implements network.Chain.
-func (c *Cosmos) SubmitRelayTx(ctx context.Context, txBz []byte, wallet network.Wallet) (string, error) {
+func (c *Cosmos) SubmitTx(ctx context.Context, txBz []byte, wallet network.Wallet) (string, error) {
 	cosmosWallet, ok := wallet.(*Wallet)
 	if !ok {
 		return "", errors.Errorf("invalid wallet type: %T", wallet)

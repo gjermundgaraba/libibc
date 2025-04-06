@@ -3,6 +3,7 @@ package cmd
 import (
 	"strings"
 
+	"github.com/gjermundgaraba/libibc/relayer"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
@@ -52,12 +53,15 @@ func relayCmd() *cobra.Command {
 				return errors.Errorf("expected 1 packet, got %d", len(packets))
 			}
 
-			relayTxHash, err := network.Relayer.Relay(ctx, fromChain, toChain, packets[0].SourceClient, packets[0].DestinationClient, relayerWallet, []string{txHash})
-			if err != nil {
+			relayer := relayer.NewRelayerQueue(logger, fromChain, toChain, relayerWallet, 1, true, "")
+
+			relayer.Add(packets[0])
+
+			if err := relayer.Flush(); err != nil {
 				return errors.Wrapf(err, "failed to relay transfer tx: %s", packets[0].TxHash)
 			}
 
-			logger.Info("Relay successful", zap.String("fromChain", fromChain.GetChainID()), zap.String("toChain", toChain.GetChainID()), zap.String("txHash", txHash), zap.String("relayTxHash", relayTxHash))
+			logger.Info("Relay successful", zap.String("fromChain", fromChain.GetChainID()), zap.String("toChain", toChain.GetChainID()), zap.String("txHash", txHash))
 
 			return nil
 		},

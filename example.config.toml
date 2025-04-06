@@ -1,4 +1,5 @@
-relayer-grpc-addr = "localhost:3000"
+eureka-api-addr = "localhost:3000"
+skip-api-addr = "https://api.skip.money"
 
 [[chains]]
   chain-id = "cosmoshub-4"
