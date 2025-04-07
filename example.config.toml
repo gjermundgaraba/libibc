@@ -13,6 +13,11 @@ skip-api-addr = "https://api.skip.money"
     client-id = "TODO"
     counterparty-chain-id = "1"
     counterparty-client-id = "TODO"
+    denom-map = {
+      uatom = "0xc12F6Ce3f6f605Ca054817290e58a20D91DeF445",
+      "ibc/D7314076D4ADBF0CA9B57CA3DB7498987C53B82886C04C9678351C9A4059B496" = "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14"
+    }
+
 
 [[chains]]
   chain-id = "1"
@@ -26,6 +31,10 @@ skip-api-addr = "https://api.skip.money"
     client-id = "TODO"
     counterparty-chain-id = "cosmoshub-4"
     counterparty-client-id = "TODO"
+    denom-map = {
+      0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14 = "ibc/D7314076D4ADBF0CA9B57CA3DB7498987C53B82886C04C9678351C9A4059B496",
+      0xc12F6Ce3f6f605Ca054817290e58a20D91DeF445 = "uatom"
+    }
 
 [[wallets]]
   private-key = "d1a0faec1c17eaa670448daee4d393803e3ef220c624a388417b22cccdd7ce94"

@@ -113,12 +113,12 @@ func (rq *RelayerQueue) relay(packets ...ibc.Packet) error {
 	ctx := context.Background()
 
 	if rq.selfRelay {
-		if err := rq.relayByWaiting(ctx, packets); err != nil {
-			return errors.Wrap(err, "failed to relay packets by waiting")
-		}
-	} else {
 		if err := rq.relayByEurekaAPI(ctx, packets); err != nil {
 			return errors.Wrap(err, "failed to relay packets by eureka API")
+		}
+	} else {
+		if err := rq.relayByWaiting(ctx, packets); err != nil {
+			return errors.Wrap(err, "failed to relay packets by waiting")
 		}
 	}
 

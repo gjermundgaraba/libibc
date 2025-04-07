@@ -86,7 +86,7 @@ func (e *Ethereum) Transact(ctx context.Context, wallet *Wallet, doTx func(*ethc
 
 	tx, err := doTx(ethClient, txOpts)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to do transaction with txOpts: %+v, using extraGwei: %d (tx, if any): %+v", txOpts, e.extraGwei, tx)
+		return nil, errors.Wrapf(err, "failed to do transaction with txOpts: %+v, using extraGwei: %d (tx, if any): tx %+v", txOpts, e.extraGwei, tx)
 	}
 
 	e.logger.Debug("Transaction sent, waiting for receipt", zap.String("tx_hash", tx.Hash().String()), zap.String("from", txOpts.From.String()), zap.Any("txOpts", txOpts))
