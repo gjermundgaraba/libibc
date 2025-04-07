@@ -43,9 +43,10 @@ type ChainConfig struct {
 
 // ClientConfig represents the configuration for a client
 type ClientConfig struct {
-	ClientID             string `toml:"client-id"`
-	CounterpartyChainID  string `toml:"counterparty-chain-id"`
-	CounterpartyClientID string `toml:"counterparty-client-id"`
+	ClientID             string            `toml:"client-id"`
+	CounterpartyChainID  string            `toml:"counterparty-chain-id"`
+	CounterpartyClientID string            `toml:"counterparty-client-id"`
+	DenomMap             map[string]string `toml:"denom-map"`
 }
 
 // WalletConfig represents the configuration for a wallet
@@ -142,9 +143,10 @@ func (c *Config) ToNetwork(ctx context.Context, logger *zap.Logger, extraGwei in
 		}
 
 		for _, clientConfig := range chainConfig.Clients {
-			counterparty := network.ClientCounterparty{
+			counterparty := network.CounterpartyInfo{
 				ClientID: clientConfig.CounterpartyClientID,
 				ChainID:  clientConfig.CounterpartyChainID,
+				DenomMap: clientConfig.DenomMap,
 			}
 			chain.AddClient(clientConfig.ClientID, counterparty)
 		}

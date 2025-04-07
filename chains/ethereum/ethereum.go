@@ -21,7 +21,7 @@ var _ network.Chain = &Ethereum{}
 
 type Ethereum struct {
 	ChainID string
-	Clients map[string]network.ClientCounterparty
+	Clients map[string]network.CounterpartyInfo
 	Wallets map[string]Wallet
 	logger  *zap.Logger
 
@@ -123,7 +123,7 @@ func newNonIBCEthereum(ctx context.Context, logger *zap.Logger, chainID string, 
 
 	return &Ethereum{
 		ChainID: chainID,
-		Clients: make(map[string]network.ClientCounterparty),
+		Clients: make(map[string]network.CounterpartyInfo),
 		Wallets: make(map[string]Wallet),
 
 		actualChainID: ethChainID,
@@ -153,22 +153,22 @@ func (e *Ethereum) GetICS26Address() ethcommon.Address {
 }
 
 // AddClient implements network.Chain.
-func (e *Ethereum) AddClient(clientID string, counterparty network.ClientCounterparty) {
+func (e *Ethereum) AddClient(clientID string, counterparty network.CounterpartyInfo) {
 	e.Clients[clientID] = counterparty
 }
 
 // GetCounterpartyClient implements network.Chain.
-func (e *Ethereum) GetCounterpartyClient(clientID string) (network.ClientCounterparty, error) {
+func (e *Ethereum) GetCounterpartyInfo(clientID string) (network.CounterpartyInfo, error) {
 	counterparty, ok := e.Clients[clientID]
 	if !ok {
-		return network.ClientCounterparty{}, errors.Errorf("client %s not found", clientID)
+		return network.CounterpartyInfo{}, errors.Errorf("client %s not found", clientID)
 	}
 
 	return counterparty, nil
 }
 
 // GetClients implements network.Chain.
-func (e *Ethereum) GetClients() map[string]network.ClientCounterparty {
+func (e *Ethereum) GetClients() map[string]network.CounterpartyInfo {
 	return e.Clients
 }
 

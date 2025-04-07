@@ -14,13 +14,9 @@ import (
 )
 
 func ParsePackets(txHash string, events []abci.Event) ([]ibc.Packet, error) {
-	ibcVersion, err := determineIBCVersion(events)
+	v2Packets, err := parseIBCV2Packet(events)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to determine IBC version")
-	}
-
-	switch ibcVersion {
-	case 1:
+		// Then we try to parse as v1
 		v1Packets, err := parseIBCV1Packets(events)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to parse IBC v1 packets")
@@ -39,44 +35,21 @@ func ParsePackets(txHash string, events []abci.Event) ([]ibc.Packet, error) {
 			))
 		}
 		return packets, nil
-	case 2:
-		v2Packets, err := parseIBCV2Packet(events)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to parse IBC v2 packets")
-		}
-
-		var packets []ibc.Packet
-		for _, packet := range v2Packets {
-			packets = append(packets, ibc.NewPacket(
-				txHash,
-				2,
-				packet.Sequence,
-				packet.SourceClient,
-				packet.DestinationClient,
-				packet.TimeoutTimestamp,
-				packet,
-			))
-		}
-		return packets, nil
-	default:
-		return nil, errors.New("unknown IBC version")
-	}
-}
-
-func determineIBCVersion(events []abci.Event) (uint, error) {
-	for _, event := range events {
-		if event.Type == "message" {
-			for _, attribute := range event.Attributes {
-				if attribute.Key == "module" && attribute.Value == "ibc_channel" {
-					return 1, nil
-				} else if attribute.Key == "module" && attribute.Value == "ibc_channelv2" {
-					return 2, nil
-				}
-			}
-		}
 	}
 
-	return 0, errors.New("could not determine IBC version")
+	var packets []ibc.Packet
+	for _, packet := range v2Packets {
+		packets = append(packets, ibc.NewPacket(
+			txHash,
+			2,
+			packet.Sequence,
+			packet.SourceClient,
+			packet.DestinationClient,
+			packet.TimeoutTimestamp,
+			packet,
+		))
+	}
+	return packets, nil
 }
 
 func parseIBCV2Packet(events []abci.Event) ([]channeltypesv2.Packet, error) {

@@ -17,7 +17,7 @@ var _ network.Chain = &Cosmos{}
 
 type Cosmos struct {
 	ChainID      string
-	Clients      map[string]network.ClientCounterparty
+	Clients      map[string]network.CounterpartyInfo
 	Wallets      map[string]Wallet
 	Bech32Prefix string
 	GasDenom     string
@@ -31,7 +31,7 @@ func NewCosmos(logger *zap.Logger, chainID string, bech32Prefix string, gasDenom
 	codec := SetupCodec()
 	return &Cosmos{
 		ChainID:      chainID,
-		Clients:      make(map[string]network.ClientCounterparty),
+		Clients:      make(map[string]network.CounterpartyInfo),
 		Wallets:      make(map[string]Wallet),
 		Bech32Prefix: bech32Prefix,
 		GasDenom:     gasDenom,
@@ -53,22 +53,22 @@ func (c *Cosmos) GetChainType() network.ChainType {
 }
 
 // AddClient implements network.Chain.
-func (c *Cosmos) AddClient(clientID string, counterparty network.ClientCounterparty) {
+func (c *Cosmos) AddClient(clientID string, counterparty network.CounterpartyInfo) {
 	c.Clients[clientID] = counterparty
 }
 
 // GetCounterpartyClient implements network.Chain.
-func (c *Cosmos) GetCounterpartyClient(clientID string) (network.ClientCounterparty, error) {
+func (c *Cosmos) GetCounterpartyInfo(clientID string) (network.CounterpartyInfo, error) {
 	counterparty, ok := c.Clients[clientID]
 	if !ok {
-		return network.ClientCounterparty{}, errors.Errorf("client %s not found", clientID)
+		return network.CounterpartyInfo{}, errors.Errorf("client %s not found", clientID)
 	}
 
 	return counterparty, nil
 }
 
 // GetClients implements network.Chain.
-func (c *Cosmos) GetClients() map[string]network.ClientCounterparty {
+func (c *Cosmos) GetClients() map[string]network.CounterpartyInfo {
 	return c.Clients
 }
 

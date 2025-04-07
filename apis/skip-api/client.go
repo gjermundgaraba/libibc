@@ -93,7 +93,10 @@ func (c *Client) GetTransferTxs(ctx context.Context, srcDenom string, fromChainI
 			from,
 			to,
 		},
-		Operations: routeResp.Operations,
+		Operations:               routeResp.Operations,
+		EstimatedAmountOut:       routeResp.EstimatedAmountOut,
+		SlippageTolerancePercent: "1",
+		ChainIdsToAffiliates:     ChainIdsToAffiliates{},
 	})
 	if err != nil {
 		return nil, err
@@ -127,8 +130,7 @@ func (c *Client) GetTransferTxs(ctx context.Context, srcDenom string, fromChainI
 			return nil, errors.New("no tx type found")
 		}
 	}
-	_ = msgsResp
-	return nil, nil
+	return txs, nil
 }
 
 func cosmosTxToNewTx(cdc codec.Codec, cosmosTx CosmosTx) (network.NewTx, error) {

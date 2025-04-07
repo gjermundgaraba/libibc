@@ -34,14 +34,14 @@ func (rq *RelayerQueue) relayByEurekaAPI(ctx context.Context, packets []ibc.Pack
 	case network.ChainTypeCosmos:
 		cosmosChain := rq.destinationChain.(*cosmos.Cosmos)
 		cosmosTx := cosmos.NewCosmosNewTx(resp.Tx)
-		if _, err := cosmosChain.SubmitTx(ctx, cosmosTx, rq.relayerWallet); err != nil {
+		if _, err := cosmosChain.SubmitTx(ctx, cosmosTx, rq.relayerWallet, 5_000_000); err != nil {
 			return errors.Wrapf(err, "failed to submit tx %s to chain %s", resp.Tx, rq.destinationChain.GetChainID())
 		}
 	case network.ChainTypeEthereum:
 		ethChain := rq.destinationChain.(*ethereum.Ethereum)
 		ics26Address := ethChain.GetICS26Address()
 		ethTx := ethereum.NewEthNewTx(resp.Tx, ics26Address)
-		if _, err := ethChain.SubmitTx(ctx, ethTx, rq.relayerWallet); err != nil {
+		if _, err := ethChain.SubmitTx(ctx, ethTx, rq.relayerWallet, 15_000_000); err != nil {
 			return errors.Wrapf(err, "failed to submit tx %s to chain %s", resp.Tx, rq.destinationChain.GetChainID())
 		}
 	default:

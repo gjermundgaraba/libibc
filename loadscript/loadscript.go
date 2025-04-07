@@ -63,6 +63,16 @@ func TransferAndRelayFromAToB(
 	totalTransfer := len(toWallets) * numPacketsPerWallet
 	transferCompleted := 0
 
+	counterpartyInfo, err := fromChain.GetCounterpartyInfo(fromClientId)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to get counterparty info for client %s", fromClientId)
+	}
+
+	destDenom, ok := counterpartyInfo.DenomMap[denom]
+	if !ok {
+		return nil, errors.Errorf("denom %s not found in counterparty info", denom)
+	}
+
 	progressCh <- ProgressUpdate{
 		FromChain:         fromChain.GetChainID(),
 		ToChain:           toChain.GetChainID(),
@@ -96,7 +106,7 @@ func TransferAndRelayFromAToB(
 					var packet ibc.Packet
 					if err := withRetry(func() error {
 						var err error
-						packet, err = transfer(ctx, logger, fromChain, fromClientId, chainAWallet, transferAmount, denom, chainBWallet.Address(), skipApiAddr)
+						packet, err = transfer(ctx, logger, fromChain, toChain, fromClientId, chainAWallet, transferAmount, denom, destDenom, chainBWallet.Address(), skipApiAddr)
 						return err
 					}); err != nil {
 						reportErr(err)
@@ -211,12 +221,12 @@ func TransferAndRelayFromAToB(
 	return progressCh, nil
 }
 
-func transfer(ctx context.Context, logger *zap.Logger, chain network.Chain, srcClientID string, wallet network.Wallet, amount *big.Int, denom string, to string, skipAPIAddr string) (ibc.Packet, error) {
+func transfer(ctx context.Context, logger *zap.Logger, chain network.Chain, destChain network.Chain, srcClientID string, wallet network.Wallet, amount *big.Int, denom string, destDenom string, to string, skipAPIAddr string) (ibc.Packet, error) {
 	if skipAPIAddr != "" {
 		skipAPIClient := skipapi.NewClient(logger, skipAPIAddr)
-		txs, err := skipAPIClient.GetTransferTxs(ctx, denom, chain.GetChainID(), denom, chain.GetChainID(), wallet.Address(), to, amount)
+		txs, err := skipAPIClient.GetTransferTxs(ctx, denom, chain.GetChainID(), destDenom, destChain.GetChainID(), wallet.Address(), to, amount)
 		if err != nil {
-			return ibc.Packet{}, errors.Wrapf(err, "failed to get transfer txs from %s to %s", chain.GetChainID(), chain.GetChainID())
+			return ibc.Packet{}, errors.Wrapf(err, "failed to get transfer txs from %s to %s", chain.GetChainID(), destChain.GetChainID())
 		}
 
 		var txHash string
@@ -228,9 +238,9 @@ func transfer(ctx context.Context, logger *zap.Logger, chain network.Chain, srcC
 			}
 
 			cosmosTx := txs[0].(*cosmos.CosmosNewTx)
-			txHash, err = cosmosChain.SubmitTx(ctx, cosmosTx, wallet)
+			txHash, err = cosmosChain.SubmitTx(ctx, cosmosTx, wallet, 500_000)
 			if err != nil {
-				return ibc.Packet{}, errors.Wrapf(err, "failed to submit transfer tx from %s to %s", chain.GetChainID(), chain.GetChainID())
+				return ibc.Packet{}, errors.Wrapf(err, "failed to submit transfer tx from %s to %s", chain.GetChainID(), destChain.GetChainID())
 			}
 		case network.ChainTypeEthereum:
 			ethChain := chain.(*ethereum.Ethereum)
@@ -238,9 +248,9 @@ func transfer(ctx context.Context, logger *zap.Logger, chain network.Chain, srcC
 			for _, tx := range txs {
 				ethTx := tx.(*ethereum.EthNewTx)
 				// We set it every time, because we only care about the last one anyway
-				txHash, err = ethChain.SubmitTx(ctx, ethTx, wallet)
+				txHash, err = ethChain.SubmitTx(ctx, ethTx, wallet, 500_000)
 				if err != nil {
-					return ibc.Packet{}, errors.Wrapf(err, "failed to submit transfer tx from %s to %s", chain.GetChainID(), chain.GetChainID())
+					return ibc.Packet{}, errors.Wrapf(err, "failed to submit transfer tx from %s to %s", chain.GetChainID(), destChain.GetChainID())
 				}
 			}
 		default:
@@ -249,7 +259,7 @@ func transfer(ctx context.Context, logger *zap.Logger, chain network.Chain, srcC
 
 		packets, err := chain.GetPackets(ctx, txHash)
 		if err != nil {
-			return ibc.Packet{}, errors.Wrapf(err, "failed to get packets from %s to %s", chain.GetChainID(), chain.GetChainID())
+			return ibc.Packet{}, errors.Wrapf(err, "failed to get packets from %s to %s with tx: %s", chain.GetChainID(), destChain.GetChainID(), txHash)
 		}
 
 		if len(packets) == 0 {

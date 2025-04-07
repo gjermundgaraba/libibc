@@ -20,12 +20,13 @@ const (
 type Network struct {
 	logger      *zap.Logger
 	chains      map[string]Chain
-	connections map[string]ClientCounterparty
+	connections map[string]CounterpartyInfo
 }
 
-type ClientCounterparty struct {
+type CounterpartyInfo struct {
 	ClientID string
 	ChainID  string
+	DenomMap map[string]string
 }
 
 type Chain interface {
@@ -37,9 +38,9 @@ type Chain interface {
 	GetWallets() []Wallet
 	GenerateWallet(walletID string) (Wallet, error)
 
-	AddClient(clientID string, counterparty ClientCounterparty)
-	GetCounterpartyClient(clientID string) (ClientCounterparty, error)
-	GetClients() map[string]ClientCounterparty
+	AddClient(clientID string, counterparty CounterpartyInfo)
+	GetCounterpartyInfo(clientID string) (CounterpartyInfo, error)
+	GetClients() map[string]CounterpartyInfo
 
 	GetPackets(ctx context.Context, txHash string) ([]ibc.Packet, error)
 	IsPacketReceived(ctx context.Context, packet ibc.Packet) (bool, error)
@@ -65,7 +66,7 @@ func BuildNetwork(logger *zap.Logger, chains []Chain) (*Network, error) {
 	network := &Network{
 		logger:      logger,
 		chains:      make(map[string]Chain),
-		connections: make(map[string]ClientCounterparty),
+		connections: make(map[string]CounterpartyInfo),
 	}
 
 	for _, chain := range chains {

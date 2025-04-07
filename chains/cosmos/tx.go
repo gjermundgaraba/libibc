@@ -38,7 +38,7 @@ func (c *CosmosNewTx) GetTxBytes() []byte {
 }
 
 // SubmitTx implements network.Chain.
-func (c *Cosmos) SubmitTx(ctx context.Context, tx *CosmosNewTx, wallet network.Wallet) (string, error) {
+func (c *Cosmos) SubmitTx(ctx context.Context, tx *CosmosNewTx, wallet network.Wallet, gas uint64) (string, error) {
 	cosmosWallet, ok := wallet.(*Wallet)
 	if !ok {
 		return "", errors.Errorf("invalid wallet type: %T", wallet)
@@ -64,7 +64,7 @@ func (c *Cosmos) SubmitTx(ctx context.Context, tx *CosmosNewTx, wallet network.W
 		msgs = append(msgs, sdkMsg)
 	}
 
-	grpcRes, err := c.submitTx(ctx, cosmosWallet, 5_000_000, msgs...)
+	grpcRes, err := c.submitTx(ctx, cosmosWallet, gas, msgs...)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to submit tx")
 	}
