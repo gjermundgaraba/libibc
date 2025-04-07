@@ -214,7 +214,7 @@ func TransferAndRelayFromAToB(
 func transfer(ctx context.Context, logger *zap.Logger, chain network.Chain, srcClientID string, wallet network.Wallet, amount *big.Int, denom string, to string, skipAPIAddr string) (ibc.Packet, error) {
 	if skipAPIAddr != "" {
 		skipAPIClient := skipapi.NewClient(logger, skipAPIAddr)
-		txBz, err := skipAPIClient.GetTransferTxs(ctx, denom, chain.GetChainID(), denom, chain.GetChainID(), wallet.Address(), to, amount)
+		txs, err := skipAPIClient.GetTransferTxs(ctx, denom, chain.GetChainID(), denom, chain.GetChainID(), wallet.Address(), to, amount)
 		if err != nil {
 			return ibc.Packet{}, errors.Wrapf(err, "failed to get transfer txs from %s to %s", chain.GetChainID(), chain.GetChainID())
 		}
@@ -223,16 +223,25 @@ func transfer(ctx context.Context, logger *zap.Logger, chain network.Chain, srcC
 		switch chain.GetChainType() {
 		case network.ChainTypeCosmos:
 			cosmosChain := chain.(*cosmos.Cosmos)
-			txHash, err = cosmosChain.SubmitTx(ctx, txBz, wallet)
+			if len(txs) != 1 {
+				return ibc.Packet{}, errors.Errorf("expected 1 tx from skip api for cosmos, got %d", len(txs))
+			}
+
+			cosmosTx := txs[0].(*cosmos.CosmosNewTx)
+			txHash, err = cosmosChain.SubmitTx(ctx, cosmosTx, wallet)
 			if err != nil {
 				return ibc.Packet{}, errors.Wrapf(err, "failed to submit transfer tx from %s to %s", chain.GetChainID(), chain.GetChainID())
 			}
 		case network.ChainTypeEthereum:
 			ethChain := chain.(*ethereum.Ethereum)
-			ics26Address := ethChain.GetICS26Address()
-			txHash, err = ethChain.SubmitTx(ctx, txBz, ics26Address, wallet)
-			if err != nil {
-				return ibc.Packet{}, errors.Wrapf(err, "failed to submit transfer tx from %s to %s", chain.GetChainID(), chain.GetChainID())
+
+			for _, tx := range txs {
+				ethTx := tx.(*ethereum.EthNewTx)
+				// We set it every time, because we only care about the last one anyway
+				txHash, err = ethChain.SubmitTx(ctx, ethTx, wallet)
+				if err != nil {
+					return ibc.Packet{}, errors.Wrapf(err, "failed to submit transfer tx from %s to %s", chain.GetChainID(), chain.GetChainID())
+				}
 			}
 		default:
 			return ibc.Packet{}, errors.Errorf("unsupported chain type %s", chain.GetChainType())

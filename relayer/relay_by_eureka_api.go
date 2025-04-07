@@ -33,13 +33,15 @@ func (rq *RelayerQueue) relayByEurekaAPI(ctx context.Context, packets []ibc.Pack
 	switch rq.destinationChain.GetChainType() {
 	case network.ChainTypeCosmos:
 		cosmosChain := rq.destinationChain.(*cosmos.Cosmos)
-		if _, err := cosmosChain.SubmitTx(ctx, resp.Tx, rq.relayerWallet); err != nil {
+		cosmosTx := cosmos.NewCosmosNewTx(resp.Tx)
+		if _, err := cosmosChain.SubmitTx(ctx, cosmosTx, rq.relayerWallet); err != nil {
 			return errors.Wrapf(err, "failed to submit tx %s to chain %s", resp.Tx, rq.destinationChain.GetChainID())
 		}
 	case network.ChainTypeEthereum:
 		ethChain := rq.destinationChain.(*ethereum.Ethereum)
 		ics26Address := ethChain.GetICS26Address()
-		if _, err := ethChain.SubmitTx(ctx, resp.Tx, ics26Address, rq.relayerWallet); err != nil {
+		ethTx := ethereum.NewEthNewTx(resp.Tx, ics26Address)
+		if _, err := ethChain.SubmitTx(ctx, ethTx, rq.relayerWallet); err != nil {
 			return errors.Wrapf(err, "failed to submit tx %s to chain %s", resp.Tx, rq.destinationChain.GetChainID())
 		}
 	default:

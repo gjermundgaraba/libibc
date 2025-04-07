@@ -49,6 +49,10 @@ type Chain interface {
 	GetBalance(ctx context.Context, address string, denom string) (*big.Int, error)
 }
 
+type NewTx interface {
+	GetTxBytes() []byte
+}
+
 type Wallet interface {
 	ID() string
 	Address() string

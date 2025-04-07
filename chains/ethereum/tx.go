@@ -17,8 +17,26 @@ import (
 	"go.uber.org/zap"
 )
 
+var _ network.NewTx = &EthNewTx{}
+
+type EthNewTx struct {
+	bz       []byte
+	contract ethcommon.Address
+}
+
+func NewEthNewTx(bz []byte, contract ethcommon.Address) *EthNewTx {
+	return &EthNewTx{
+		bz:       bz,
+		contract: contract,
+	}
+}
+
+func (c *EthNewTx) GetTxBytes() []byte {
+	return c.bz
+}
+
 // SubmitTx implements network.Chain.
-func (e *Ethereum) SubmitTx(ctx context.Context, txBz []byte, contract ethcommon.Address, wallet network.Wallet) (string, error) {
+func (e *Ethereum) SubmitTx(ctx context.Context, ethTx *EthNewTx, wallet network.Wallet) (string, error) {
 	ethereumWallet, ok := wallet.(*Wallet)
 	if !ok {
 		return "", errors.Errorf("invalid wallet type: %T", wallet)
@@ -27,11 +45,11 @@ func (e *Ethereum) SubmitTx(ctx context.Context, txBz []byte, contract ethcommon
 	receipt, err := e.Transact(ctx, ethereumWallet, func(ethClient *ethclient.Client, txOpts *bind.TransactOpts) (*ethtypes.Transaction, error) {
 		unsignedTx := ethtypes.NewTransaction(
 			txOpts.Nonce.Uint64(),
-			contract,
+			ethTx.contract,
 			new(big.Int).SetUint64(0),
 			15_000_000,
 			txOpts.GasPrice,
-			txBz,
+			ethTx.bz,
 		)
 
 		signedTx, err := txOpts.Signer(txOpts.From, unsignedTx)

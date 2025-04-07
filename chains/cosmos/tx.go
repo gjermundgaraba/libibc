@@ -21,8 +21,24 @@ import (
 	"go.uber.org/zap"
 )
 
+var _ network.NewTx = &CosmosNewTx{}
+
+type CosmosNewTx struct {
+	bz []byte
+}
+
+func NewCosmosNewTx(bz []byte) *CosmosNewTx {
+	return &CosmosNewTx{
+		bz: bz,
+	}
+}
+
+func (c *CosmosNewTx) GetTxBytes() []byte {
+	return c.bz
+}
+
 // SubmitTx implements network.Chain.
-func (c *Cosmos) SubmitTx(ctx context.Context, txBz []byte, wallet network.Wallet) (string, error) {
+func (c *Cosmos) SubmitTx(ctx context.Context, tx *CosmosNewTx, wallet network.Wallet) (string, error) {
 	cosmosWallet, ok := wallet.(*Wallet)
 	if !ok {
 		return "", errors.Errorf("invalid wallet type: %T", wallet)
@@ -30,7 +46,7 @@ func (c *Cosmos) SubmitTx(ctx context.Context, txBz []byte, wallet network.Walle
 
 	// Extract messages from the response (cosmos specific)
 	var txBody txtypes.TxBody
-	if err := proto.Unmarshal(txBz, &txBody); err != nil {
+	if err := proto.Unmarshal(tx.GetTxBytes(), &txBody); err != nil {
 		return "", err
 	}
 

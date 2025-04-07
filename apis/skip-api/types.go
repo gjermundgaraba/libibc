@@ -89,23 +89,46 @@ type ChainIdsToAffiliates struct{}
 type MsgsResponse struct {
 	EstimatedFees []any `json:"estimated_fees"`
 	Msgs          []struct {
-		MultiChainMsg struct {
-			ChainID    string   `json:"chain_id"`
-			Msg        string   `json:"msg"`
-			MsgTypeURL string   `json:"msg_type_url"`
-			Path       []string `json:"path"`
-		} `json:"multi_chain_msg"`
+		MultiChainMsg *MultiChainMsg `json:"multi_chain_msg,omitempty"`
+		EvmTx         *EvmTx         `json:"evm_tx,omitempty"`
 	} `json:"msgs"`
 	Txs []struct {
-		CosmosTx struct {
-			ChainID string `json:"chain_id"`
-			Msgs    []struct {
-				Msg        string `json:"msg"`
-				MsgTypeURL string `json:"msg_type_url"`
-			} `json:"msgs"`
-			Path          []string `json:"path"`
-			SignerAddress string   `json:"signer_address"`
-		} `json:"cosmos_tx"`
-		OperationsIndices []int `json:"operations_indices"`
+		CosmosTx          *CosmosTx `json:"cosmos_tx,omitempty"`
+		EvmTx             *EvmTx    `json:"evm_tx,omitempty"`
+		OperationsIndices []int     `json:"operations_indices"`
 	} `json:"txs"`
+}
+
+type CosmosTx struct {
+	ChainID       string        `json:"chain_id"`
+	Msgs          []CosmosTxMsg `json:"msgs"`
+	Path          []string      `json:"path"`
+	SignerAddress string        `json:"signer_address"`
+}
+
+type EvmTx struct {
+	ChainID                string                  `json:"chain_id"`
+	To                     string                  `json:"to"`
+	Value                  string                  `json:"value"`
+	Data                   string                  `json:"data"`
+	RequiredErc20Approvals []RequiredErc20Approval `json:"required_erc20_approvals"`
+	SignerAddress          string                  `json:"signer_address"`
+}
+
+type MultiChainMsg struct {
+	ChainID    string   `json:"chain_id"`
+	Msg        string   `json:"msg"`
+	MsgTypeURL string   `json:"msg_type_url"`
+	Path       []string `json:"path"`
+}
+
+type RequiredErc20Approval struct {
+	TokenContract string `json:"token_contract"`
+	Spender       string `json:"spender"`
+	Amount        string `json:"amount"`
+}
+
+type CosmosTxMsg struct {
+	Msg        string `json:"msg"`
+	MsgTypeURL string `json:"msg_type_url"`
 }
