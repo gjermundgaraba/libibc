@@ -176,6 +176,14 @@ func cosmosMsgToAny(cdc codec.Codec, msg CosmosTxMsg) (*codectypes.Any, error) {
 func evmTxToNewTx(evmTx EvmTx) ([]network.NewTx, error) {
 	var txs []network.NewTx
 
+	for _, erc20Approval := range evmTx.RequiredErc20Approvals {
+		newTx, err := requiredErc20ApprovalToNewTx(erc20Approval)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to convert erc20 approval to new tx")
+		}
+		txs = append(txs, newTx)
+	}
+
 	to := ethcommon.HexToAddress(evmTx.To)
 	data, err := hex.DecodeString(evmTx.Data)
 	if err != nil {
@@ -184,14 +192,6 @@ func evmTxToNewTx(evmTx EvmTx) ([]network.NewTx, error) {
 
 	newTx := ethereum.NewEthNewTx(data, to)
 	txs = append(txs, newTx)
-
-	for _, erc20Approval := range evmTx.RequiredErc20Approvals {
-		newTx, err := requiredErc20ApprovalToNewTx(erc20Approval)
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to convert erc20 approval to new tx")
-		}
-		txs = append(txs, newTx)
-	}
 
 	return txs, nil
 }
