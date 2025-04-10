@@ -48,6 +48,7 @@ func NewRootCmd() *cobra.Command {
 		balanceCmd(),
 		transferCmd(),
 		apiCmd(),
+		clientMigrateMsgCmd(),
 	)
 
 	return rootCmd

@@ -61,7 +61,30 @@ func (r *Client) RelayByTx(ctx context.Context, srcChainID string, dstChainID st
 		return nil, errors.Wrapf(err, "failed to relay tx: %s, with request: %v", err, req)
 	}
 
-	r.logger.Info("Relay request successful", zap.Any("resp", resp), zap.String("srcChainID", srcChainID), zap.String("dstChainID", dstChainID), zap.String("srdClientID", srcClientID), zap.String("targetClientId", dstClientID), zap.Strings("txIds", txIds), zap.Any("txIdsBytes", txIdsBytes))
+	r.logger.Info("Relay request successful", zap.Any("resp", resp), zap.String("srcChainID", srcChainID), zap.String("dstChainID", dstChainID), zap.String("srdClientID", srcClientID), zap.String("targetClientId", dstClientID), zap.Strings("txIds", txIds))
+
+	return resp, nil
+}
+
+func (r *Client) CreateClient(ctx context.Context, srcChainID string, dstChainID string, params map[string]string) (*CreateClientResponse, error) {
+	conn, err := utils.GetGRPC(r.grpcAddr)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get grpc connection")
+	}
+
+	relayerClient := NewRelayerServiceClient(conn)
+
+	req := &CreateClientRequest{
+		SrcChain:   srcChainID,
+		DstChain:   dstChainID,
+		Parameters: params,
+	}
+
+	r.logger.Debug("Starting create client request", zap.String("srcChainID", srcChainID), zap.String("dstChainID", dstChainID), zap.Any("params", params))
+	resp, err := relayerClient.CreateClient(ctx, req)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed create client req: %s, with request: %v", err, req)
+	}
 
 	return resp, nil
 }

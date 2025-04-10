@@ -4,9 +4,6 @@ import (
 	"context"
 	"time"
 
-	// dbm "github.com/cosmos/cosmos-db"
-	// "github.com/cosmos/cosmos-sdk/client/tx"
-	// simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
 	"github.com/cosmos/cosmos-sdk/client/tx"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	txtypes "github.com/cosmos/cosmos-sdk/types/tx"
@@ -38,7 +35,7 @@ func (c *CosmosNewTx) GetTxBytes() []byte {
 }
 
 // SubmitTx implements network.Chain.
-func (c *Cosmos) SubmitTx(ctx context.Context, tx *CosmosNewTx, wallet network.Wallet, gas uint64) (string, error) {
+func (c *Cosmos) SubmitTx(ctx context.Context, newTx *CosmosNewTx, wallet network.Wallet, gas uint64) (string, error) {
 	cosmosWallet, ok := wallet.(*Wallet)
 	if !ok {
 		return "", errors.Errorf("invalid wallet type: %T", wallet)
@@ -46,7 +43,7 @@ func (c *Cosmos) SubmitTx(ctx context.Context, tx *CosmosNewTx, wallet network.W
 
 	// Extract messages from the response (cosmos specific)
 	var txBody txtypes.TxBody
-	if err := proto.Unmarshal(tx.GetTxBytes(), &txBody); err != nil {
+	if err := proto.Unmarshal(newTx.GetTxBytes(), &txBody); err != nil {
 		return "", err
 	}
 
