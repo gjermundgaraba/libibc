@@ -13,7 +13,7 @@ func TestWalletGetAddress(t *testing.T) {
 	const expectedAddress = "cosmos1maysgktd0ugpnrdkkyls8qyap83gk3wt7hxdp5"
 
 	testLogger, _ := zap.NewDevelopment()
-	cosmos, err := NewCosmos(testLogger, "test-chain-id", "cosmos", "uatom", "")
+	cosmos, err := NewCosmos(testLogger, "test-chain-id", "cosmos", "uatom", 0, "")
 	require.NoError(t, err)
 
 	// Act

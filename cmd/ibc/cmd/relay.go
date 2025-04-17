@@ -53,7 +53,7 @@ func relayCmd() *cobra.Command {
 				return errors.Errorf("expected 1 packet, got %d", len(packets))
 			}
 
-			relayer := relayer.NewRelayerQueue(logger, fromChain, toChain, relayerWallet, 1, true, "")
+			relayer := relayer.NewRelayerQueue(logger, fromChain, toChain, relayerWallet, 1, true, cfg.EurekaAPIAddr)
 
 			relayer.Add(packets[0])
 

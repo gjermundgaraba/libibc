@@ -7,6 +7,7 @@ skip-api-addr = "https://api.skip.money"
   grpc-addr = "cosmos-grpc.polkachu.com:14990"
   bech32-prefix = "cosmos"
   gas-denom = "uatom"
+  gas-prices = 0.025
   wallet-ids = ["cosmos-1", "cosmos-relayer"]
 
   [[chains.clients]]

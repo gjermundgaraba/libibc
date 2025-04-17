@@ -21,13 +21,14 @@ type Cosmos struct {
 	Wallets      map[string]Wallet
 	Bech32Prefix string
 	GasDenom     string
+	GasPrices    float64
 
 	grpcAddr string
 	codec    codec.Codec
 	logger   *zap.Logger
 }
 
-func NewCosmos(logger *zap.Logger, chainID string, bech32Prefix string, gasDenom string, grpc string) (*Cosmos, error) {
+func NewCosmos(logger *zap.Logger, chainID string, bech32Prefix string, gasDenom string, gasPrices float64, grpc string) (*Cosmos, error) {
 	codec := SetupCodec()
 	return &Cosmos{
 		ChainID:      chainID,
@@ -35,6 +36,7 @@ func NewCosmos(logger *zap.Logger, chainID string, bech32Prefix string, gasDenom
 		Wallets:      make(map[string]Wallet),
 		Bech32Prefix: bech32Prefix,
 		GasDenom:     gasDenom,
+		GasPrices:    gasPrices,
 
 		grpcAddr: grpc,
 		codec:    codec,

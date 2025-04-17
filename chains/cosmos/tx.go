@@ -47,6 +47,13 @@ func (c *Cosmos) SubmitTx(ctx context.Context, newTx *CosmosNewTx, wallet networ
 		return "", err
 	}
 
+	txJson, err := c.codec.MarshalJSON(&txBody)
+	if err != nil {
+		// this is only used for debugging, so we just log it
+		c.logger.Error("failed to marshal tx body to json", zap.Error(err))
+	}
+	c.logger.Debug("tx body", zap.String("tx_body", string(txJson)))
+
 	if len(txBody.Messages) == 0 {
 		return "", errors.New("no messages in tx")
 	}
@@ -82,11 +89,15 @@ func (c *Cosmos) submitTx(ctx context.Context, wallet *Wallet, gas uint64, msgs 
 		return nil, errors.Wrap(err, "failed to get account info")
 	}
 
+	exp := time.Date(2025, time.April, 15, 15, 0, 0, 0, time.UTC)
+	_ = exp
+
 	txCfg := authtx.NewTxConfig(c.codec, authtx.DefaultSignModes)
 	txBuilder := txCfg.NewTxBuilder()
 	txBuilder.SetGasLimit(gas)
 	txBuilder.SetMsgs(msgs...)
-	txBuilder.SetFeeAmount(sdk.NewCoins(sdk.NewInt64Coin(c.GasDenom, int64(gas))))
+	gasPrice := int64(float64(gas) * c.GasPrices)
+	txBuilder.SetFeeAmount(sdk.NewCoins(sdk.NewInt64Coin(c.GasDenom, gasPrice)))
 
 	sigV2 := signing.SignatureV2{
 		PubKey: wallet.privateKey.PubKey(),

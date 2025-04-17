@@ -34,7 +34,7 @@ func (rq *RelayerQueue) relayByEurekaAPI(ctx context.Context, packets []ibc.Pack
 	case network.ChainTypeCosmos:
 		cosmosChain := rq.destinationChain.(*cosmos.Cosmos)
 		cosmosTx := cosmos.NewCosmosNewTx(resp.Tx)
-		if _, err := cosmosChain.SubmitTx(ctx, cosmosTx, rq.relayerWallet, 5_000_000); err != nil {
+		if _, err := cosmosChain.SubmitTx(ctx, cosmosTx, rq.relayerWallet, 10_000_000); err != nil {
 			return errors.Wrapf(err, "failed to submit tx %s to chain %s", resp.Tx, rq.destinationChain.GetChainID())
 		}
 	case network.ChainTypeEthereum:

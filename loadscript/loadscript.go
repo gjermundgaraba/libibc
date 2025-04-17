@@ -69,7 +69,7 @@ func TransferAndRelayFromAToB(
 	}
 
 	destDenom, ok := counterpartyInfo.DenomMap[denom]
-	if !ok {
+	if !ok && !selfRelay { // we dont care abhout this if we are self relaying
 		return nil, errors.Errorf("denom %s not found in counterparty info", denom)
 	}
 

@@ -55,13 +55,14 @@ func (r *Client) RelayByTx(ctx context.Context, srcChainID string, dstChainID st
 		SrcClientId: srcClientID,
 		DstClientId: dstClientID,
 	}
+
 	r.logger.Debug("Starting relayByTx request", zap.String("srcChainID", srcChainID), zap.String("dstChainID", dstChainID), zap.String("srdClientID", srcClientID), zap.String("targetClientId", dstClientID), zap.Strings("txIds", txIds), zap.Any("txIdsBytes", txIdsBytes))
 	resp, err := relayerClient.RelayByTx(ctx, req)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to relay tx: %s, with request: %v", err, req)
 	}
 
-	r.logger.Info("Relay request successful", zap.Any("resp", resp), zap.String("srcChainID", srcChainID), zap.String("dstChainID", dstChainID), zap.String("srdClientID", srcClientID), zap.String("targetClientId", dstClientID), zap.Strings("txIds", txIds))
+	r.logger.Info("Relay request successful", zap.String("srcChainID", srcChainID), zap.String("dstChainID", dstChainID), zap.String("srdClientID", srcClientID), zap.String("targetClientId", dstClientID), zap.Strings("txIds", txIds))
 
 	return resp, nil
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	txtypes "github.com/cosmos/cosmos-sdk/types/tx"
 	"github.com/cosmos/gogoproto/proto"
@@ -18,17 +19,21 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type ClientMigrateMsg struct {
+type InstantiateMsg struct {
 	ClientState    []byte `json:"client_state"`
 	ConsensusState []byte `json:"consensus_state"`
 	Checksum       []byte `json:"checksum"`
 }
 
+type WasmMigrateMsg struct {
+	InstantiateMsg InstantiateMsg `json:"instantiate_msg"`
+}
+
 func clientMigrateMsgCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "client-migrate-msg [from-chain-id] [to-chain-id] [key]... [value]...",
+		Use:   "client-migrate-msg [from-chain-id] [to-chain-id] [client-id] [signer] [key]... [value]...",
 		Short: "Create client migrate msg",
-		Args:  cobra.MinimumNArgs(2),
+		Args:  cobra.MinimumNArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 
@@ -45,8 +50,10 @@ func clientMigrateMsgCmd() *cobra.Command {
 
 			srcChainID := args[0]
 			dstChainID := args[1]
+			clientID := args[2]
+			signer := args[3]
 			params := make(map[string]string)
-			for i := 2; i < len(args); i += 2 {
+			for i := 4; i < len(args); i += 2 {
 				if i+1 >= len(args) {
 					return errors.New("missing value for key")
 				}
@@ -118,18 +125,42 @@ func clientMigrateMsgCmd() *cobra.Command {
 				return errors.New("expected Wasm consensus state")
 			}
 
-			migrateClientMsg := &ClientMigrateMsg{
-				ClientState:    wasmClientState.Data,
-				ConsensusState: wasmConsensusState.Data,
-				Checksum:       wasmClientState.Checksum,
+			wasmMigrateMsg := &WasmMigrateMsg{
+				InstantiateMsg: InstantiateMsg{
+					ClientState:    wasmClientState.Data,
+					ConsensusState: wasmConsensusState.Data,
+					Checksum:       wasmClientState.Checksum,
+				},
 			}
 
-			migrateClientMsgBz, err := json.Marshal(migrateClientMsg)
+			wasmMigrateMsgBz, err := json.Marshal(wasmMigrateMsg)
 			if err != nil {
 				return errors.Wrapf(err, "failed to marshal migrate client message")
 			}
 
-			fmt.Println(string(migrateClientMsgBz))
+			var msgMigrateContract sdk.Msg
+			msgMigrateContract = &ibcwasmtypes.MsgMigrateContract{
+				Signer:   signer,
+				ClientId: clientID,
+				Checksum: wasmClientState.Checksum,
+				Msg:      wasmMigrateMsgBz,
+			}
+
+			msgMigrateContractProtoMsg, ok := msgMigrateContract.(proto.Message)
+			if !ok {
+				return errors.New("expected MsgMigrateContract message")
+			}
+
+			msgMigrateContractAny, err := codectypes.NewAnyWithValue(msgMigrateContractProtoMsg)
+			if err != nil {
+				return errors.Wrapf(err, "failed to pack message")
+			}
+			msgMigrateContractBz, err := cosmosCodec.MarshalJSON(msgMigrateContractAny)
+			if err != nil {
+				return errors.Wrapf(err, "failed to marshal migrate client message")
+			}
+
+			fmt.Println(string(msgMigrateContractBz))
 
 			return nil
 		},
