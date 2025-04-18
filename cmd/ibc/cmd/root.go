@@ -49,6 +49,7 @@ func NewRootCmd() *cobra.Command {
 		transferCmd(),
 		apiCmd(),
 		clientMigrateMsgCmd(),
+		localnetCmd(),
 	)
 
 	return rootCmd
