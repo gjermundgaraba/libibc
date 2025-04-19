@@ -454,6 +454,24 @@ func (tn *Node) RecoverKey(ctx context.Context, keyName, mnemonic string) error 
 	return err
 }
 
+func (tn *Node) PrivateKey(ctx context.Context, keyName string) (string, error) {
+	command := []string{
+		"sh",
+		"-c",
+		fmt.Sprintf(`echo "y" | %s keys export %s --unarmored-hex --unsafe --keyring-backend %s --home %s`, tn.Chain.cfg.Bin, keyName, keyring.BackendTest, tn.HomeDir()),
+	}
+
+	tn.lock.Lock()
+	defer tn.lock.Unlock()
+
+	stdout, stderr, err := tn.Exec(ctx, command, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to export key %q (stderr=%q): %w", keyName, stderr, err)
+	}
+
+	return string(bytes.TrimSuffix(stdout, []byte("\n"))), nil
+}
+
 func (tn *Node) IsAboveSDK47(ctx context.Context) bool {
 	// In SDK v47, a new genesis core command was added. This spec has many state breaking features
 	// so we use this to switch between new and legacy SDK logic.

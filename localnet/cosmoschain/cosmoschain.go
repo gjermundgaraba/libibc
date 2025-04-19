@@ -22,6 +22,8 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+const FaucetKeyName = "faucet"
+
 // CosmosChain is a local docker testnet for a Cosmos SDK chain.
 // Implements the ibc.Chain interface.
 type CosmosChain struct {
@@ -131,16 +133,19 @@ func (c *CosmosChain) Exec(ctx context.Context, cmd []string, env []string) (std
 	return c.Validators[0].Exec(ctx, cmd, env)
 }
 
+// TODO: Remove or make private
 // Implements Chain interface
 func (c *CosmosChain) GetRPCAddress() string {
 	return fmt.Sprintf("http://%s:26657", c.Validators[0].HostName())
 }
 
+// TODO: Remove or make private
 // Implements Chain interface
 func (c *CosmosChain) GetAPIAddress() string {
 	return fmt.Sprintf("http://%s:1317", c.Validators[0].HostName())
 }
 
+// TODO: Remove or make private
 // Implements Chain interface
 func (c *CosmosChain) GetGRPCAddress() string {
 	return fmt.Sprintf("%s:9090", c.Validators[0].HostName())
@@ -215,6 +220,11 @@ func (c *CosmosChain) BuildWallet(ctx context.Context, keyName string, mnemonic 
 	}
 
 	return NewWallet(keyName, addrBytes, mnemonic, c.cfg), nil
+}
+
+// TODO: make this private
+func (c *CosmosChain) PrivateKey(ctx context.Context, keyName string) (string, error) {
+	return c.Validators[0].PrivateKey(ctx, keyName)
 }
 
 func (c *CosmosChain) pullImages(ctx context.Context, cli *client.Client) {
@@ -322,7 +332,7 @@ func (c *CosmosChain) initializeChainNodes(
 
 func (c *CosmosChain) createFaucetWallet(ctx context.Context) (WalletAmount, error) {
 	// Faucet addresses are created separately because they need to be explicitly added to the chains.
-	faucetWallet, err := c.BuildWallet(ctx, "faucet", "")
+	faucetWallet, err := c.BuildWallet(ctx, FaucetKeyName, "")
 	if err != nil {
 		return WalletAmount{}, fmt.Errorf("failed to create faucet account: %w", err)
 	}
