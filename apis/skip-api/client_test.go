@@ -3,7 +3,7 @@ package skipapi
 import (
 	"testing"
 
-	"github.com/gjermundgaraba/libibc/chains/cosmos"
+	"github.com/gjermundgaraba/libibc/chainclients/cosmos"
 	"github.com/stretchr/testify/require"
 )
 

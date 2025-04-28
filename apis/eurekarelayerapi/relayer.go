@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
-	"github.com/gjermundgaraba/libibc/utils"
+	"github.com/gjermundgaraba/libibc/chainclients/utils"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )

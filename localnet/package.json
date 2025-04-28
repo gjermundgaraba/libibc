@@ -1,0 +1,9 @@
+{
+  "name": "localnet-dependencies",
+  "description": "Localnet dependencies with bun",
+  "version": "1.0.0",
+  "dependencies": {
+    "@cosmos/solidity-ibc-eureka": "github:cosmos/solidity-ibc-eureka#solidity-v1.1.0"
+  },
+  "private": true
+}

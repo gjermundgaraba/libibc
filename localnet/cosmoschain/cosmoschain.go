@@ -16,6 +16,7 @@ import (
 	dockerimage "github.com/docker/docker/api/types/image"
 	volumetypes "github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
+	"github.com/gjermundgaraba/libibc/chainclients/cosmos"
 	"github.com/gjermundgaraba/libibc/localnet/cosmoschain/dockerutils"
 
 	"go.uber.org/zap"
@@ -27,8 +28,9 @@ const FaucetKeyName = "faucet"
 // CosmosChain is a local docker testnet for a Cosmos SDK chain.
 // Implements the ibc.Chain interface.
 type CosmosChain struct {
+	ChainClient  *cosmos.Cosmos
 	cfg          ChainConfig
-	CleanupLabel string
+	cleanupLabel string
 
 	numValidators int
 	numFullNodes  int
@@ -39,7 +41,7 @@ type CosmosChain struct {
 	log *zap.Logger
 }
 
-func NewCosmosChain(log *zap.Logger, chainID string, cfg ChainConfig, cleanupLabel string, numValidators int, numFullNodes int) *CosmosChain {
+func SpinUpCosmos(ctx context.Context, log *zap.Logger, chainID string, cfg ChainConfig, cleanupLabel string, numValidators int, numFullNodes int) (*CosmosChain, dockerutils.CleanupFunc, error) {
 	// if chainConfig.EncodingConfig == nil {
 	// 	cfg := DefaultEncoding()
 	// 	chainConfig.EncodingConfig = &cfg
@@ -49,9 +51,9 @@ func NewCosmosChain(log *zap.Logger, chainID string, cfg ChainConfig, cleanupLab
 	cryptocodec.RegisterInterfaces(registry)
 	cdc := codec.NewProtoCodec(registry)
 
-	return &CosmosChain{
+	cosmosChain := &CosmosChain{
 		cfg:          cfg,
-		CleanupLabel: cleanupLabel,
+		cleanupLabel: cleanupLabel,
 
 		numValidators: numValidators,
 		numFullNodes:  numFullNodes,
@@ -59,6 +61,13 @@ func NewCosmosChain(log *zap.Logger, chainID string, cfg ChainConfig, cleanupLab
 		cdc: cdc,
 		log: log,
 	}
+
+	cleanupFunc, err := cosmosChain.start(ctx, log)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to spin up cosmos chain: %w", err)
+	}
+
+	return cosmosChain, cleanupFunc, nil
 }
 
 // GetCodec returns the codec for the chain.
@@ -256,7 +265,7 @@ func (c *CosmosChain) NewChainNode(
 ) (*Node, error) {
 	// Construct the Node first so we can access its name.
 	// The Node's VolumeName cannot be set until after we create the volume.
-	tn := NewChainNode(c.log, validator, c, cli, networkID, image, c.CleanupLabel, index)
+	tn := NewChainNode(c.log, validator, c, cli, networkID, image, c.cleanupLabel, index)
 
 	v, err := cli.VolumeCreate(ctx, volumetypes.CreateOptions{
 		Labels: map[string]string{
@@ -367,8 +376,8 @@ type ValidatorWithIntPower struct {
 }
 
 // Bootstraps the chain and starts it from genesis
-func (c *CosmosChain) Start(ctx context.Context, log *zap.Logger, additionalGenesisWallets ...WalletAmount) (dockerutils.CleanupFunc, error) {
-	dockerClient, networkID, cleanupFunc := dockerutils.DockerSetup(log, c.CleanupLabel)
+func (c *CosmosChain) start(ctx context.Context, log *zap.Logger, additionalGenesisWallets ...WalletAmount) (dockerutils.CleanupFunc, error) {
+	dockerClient, networkID, cleanupFunc := dockerutils.DockerSetup(log, c.cleanupLabel)
 
 	// Initialize the chain (pull docker images, etc.).
 	if err := c.initializeChainNodes(ctx, dockerClient, networkID); err != nil {
@@ -420,7 +429,7 @@ func (c *CosmosChain) Start(ctx context.Context, log *zap.Logger, additionalGene
 					ctx,
 					validator.logger(),
 					validator.DockerClient,
-					c.CleanupLabel,
+					c.cleanupLabel,
 					validator.VolumeName,
 					configFile,
 					modifiedToml,
@@ -450,7 +459,7 @@ func (c *CosmosChain) Start(ctx context.Context, log *zap.Logger, additionalGene
 					ctx,
 					fullNode.logger(),
 					fullNode.DockerClient,
-					c.CleanupLabel,
+					c.cleanupLabel,
 					fullNode.VolumeName,
 					configFile,
 					modifiedToml,
@@ -573,7 +582,26 @@ func (c *CosmosChain) Start(ctx context.Context, log *zap.Logger, additionalGene
 	}
 
 	// Wait for blocks before considering the chains "started"
-	return cleanupFunc, WaitForBlocks(ctx, 2, c.Validators[0])
+	if err := WaitForBlocks(ctx, 5, c.Validators[0]); err != nil {
+		return nil, fmt.Errorf("failed to wait for blocks after start: %w", err)
+	}
+
+	cosmosClient, err := cosmos.NewCosmos(log.With(zap.String("scope", "cosmos-client")), c.cfg.ChainID, c.cfg.Bech32Prefix, c.cfg.Denom, 0, c.GetHostGRPCAddress())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create cosmos client after start: %w", err)
+	}
+
+	faucetPrivateKeyHex, err := c.PrivateKey(ctx, FaucetKeyName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get faucet private key after start: %w", err)
+	}
+	if err := cosmosClient.AddWallet(FaucetKeyName, faucetPrivateKeyHex); err != nil {
+		return nil, fmt.Errorf("failed to add faucet wallet to cosmos client after start: %w", err)
+	}
+
+	c.ChainClient = cosmosClient
+
+	return cleanupFunc, nil
 }
 
 // Height implements ibc.Chain

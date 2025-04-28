@@ -15,11 +15,11 @@ import (
 	txtypes "github.com/cosmos/cosmos-sdk/types/tx"
 	"github.com/cosmos/gogoproto/proto"
 
-	"github.com/gjermundgaraba/libibc/chains/cosmos"
-	"github.com/gjermundgaraba/libibc/chains/ethereum"
-	"github.com/gjermundgaraba/libibc/chains/ethereum/erc20"
-	"github.com/gjermundgaraba/libibc/chains/network"
-	"github.com/gjermundgaraba/libibc/utils"
+	"github.com/gjermundgaraba/libibc/chainclients/cosmos"
+	"github.com/gjermundgaraba/libibc/chainclients/ethereum"
+	"github.com/gjermundgaraba/libibc/chainclients/ethereum/erc20"
+	"github.com/gjermundgaraba/libibc/chainclients/network"
+	"github.com/gjermundgaraba/libibc/chainclients/utils"
 )
 
 type Client struct {

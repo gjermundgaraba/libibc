@@ -1,4 +1,5 @@
-CLAUDE.md
+node_modules/
+
 config.toml
 config.*.toml
 load-config.*.toml

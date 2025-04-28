@@ -2,7 +2,7 @@ package ethereumchain
 
 func DefaultNetworkParams() NetworkParams {
 	return NetworkParams{
-		Participants: []Participants{
+		Participants: []Participant{
 			{
 				CLType:         "lodestar",
 				CLImage:        "ethpandaops/lodestar:unstable",
@@ -24,13 +24,13 @@ func DefaultNetworkParams() NetworkParams {
 
 // To see all the configuration options: github.com/ethpandaops/ethereum-package
 type NetworkParams struct {
-	Participants        []Participants      `json:"participants"`
+	Participants        []Participant       `json:"participants"`
 	NetworkParams       NetworkConfigParams `json:"network_params"`
 	WaitForFinalization bool                `json:"wait_for_finalization"`
 	AdditionalServices  []string            `json:"additional_services"`
 }
 
-type Participants struct {
+type Participant struct {
 	CLType         string   `json:"cl_type"`
 	CLImage        string   `json:"cl_image"`
 	ELType         string   `json:"el_type"`

@@ -1,0 +1,153 @@
+package ethereum
+
+import (
+	"context"
+	"math/big"
+
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
+	ethcommon "github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/gjermundgaraba/libibc/chainclients/ethereum/erc20"
+	"github.com/gjermundgaraba/libibc/chainclients/network"
+	"github.com/pkg/errors"
+	"go.uber.org/zap"
+)
+
+var _ network.Chain = &Ethereum{}
+
+type Ethereum struct {
+	ChainID string
+	Clients map[string]network.CounterpartyInfo
+	Wallets map[string]Wallet
+	logger  *zap.Logger
+
+	actualChainID *big.Int
+	RPC           string
+
+	ICS26Address         ethcommon.Address
+	ICS20Address         ethcommon.Address
+	RelayerHelperAddress ethcommon.Address
+	extraGwei            int64
+}
+
+func NewEthereum(ctx context.Context, logger *zap.Logger, chainID string, ethRPC string, ics26AddressHex string, relayerHelperAddressHex string) (*Ethereum, error) {
+	eth, err := NewNonIBCEthereum(ctx, logger, chainID, ethRPC)
+	if err != nil {
+		return nil, err
+	}
+
+	ethClient, err := ethclient.Dial(ethRPC)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to dial ethereum client")
+	}
+
+	eth.ICS26Address = ethcommon.HexToAddress(ics26AddressHex)
+	router, err := ics26router.NewContract(eth.ICS26Address, ethClient)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get ics26 router contract")
+	}
+
+	eth.ICS20Address, err = router.GetIBCApp(nil, "transfer")
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get ics20 address")
+	}
+
+	eth.RelayerHelperAddress = ethcommon.HexToAddress(relayerHelperAddressHex)
+
+	return eth, nil
+}
+
+func NewNonIBCEthereum(ctx context.Context, logger *zap.Logger, chainID string, ethRPC string) (*Ethereum, error) {
+	ethClient, err := ethclient.Dial(ethRPC)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to dial ethereum client")
+	}
+
+	ethChainID, err := ethClient.ChainID(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get ethereum chain ID")
+	}
+
+	return &Ethereum{
+		ChainID: chainID,
+		Clients: make(map[string]network.CounterpartyInfo),
+		Wallets: make(map[string]Wallet),
+
+		actualChainID: ethChainID,
+		RPC:           ethRPC,
+		logger:        logger,
+
+		// The ibc related fields should be set by the caller
+	}, nil
+}
+
+func (e *Ethereum) SetExtraGwei(extraGwei int64) {
+	e.extraGwei = extraGwei
+}
+
+// GetChainID implements network.Chain.
+func (e *Ethereum) GetChainID() string {
+	return e.ChainID
+}
+
+// GetChainType implements network.Chain.
+func (e *Ethereum) GetChainType() network.ChainType {
+	return network.ChainTypeEthereum
+}
+
+func (e *Ethereum) GetICS26Address() ethcommon.Address {
+	return e.ICS26Address
+}
+
+// AddClient implements network.Chain.
+func (e *Ethereum) AddClient(clientID string, counterparty network.CounterpartyInfo) {
+	e.Clients[clientID] = counterparty
+}
+
+// GetCounterpartyClient implements network.Chain.
+func (e *Ethereum) GetCounterpartyInfo(clientID string) (network.CounterpartyInfo, error) {
+	counterparty, ok := e.Clients[clientID]
+	if !ok {
+		return network.CounterpartyInfo{}, errors.Errorf("client %s not found", clientID)
+	}
+
+	return counterparty, nil
+}
+
+// GetClients implements network.Chain.
+func (e *Ethereum) GetClients() map[string]network.CounterpartyInfo {
+	return e.Clients
+}
+
+// GetBalance implements network.Chain.
+func (e *Ethereum) GetBalance(ctx context.Context, address string, denom string) (*big.Int, error) {
+	client, err := ethclient.Dial(e.RPC)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to dial ethereum client")
+	}
+
+	ethAddress := ethcommon.HexToAddress(address)
+
+	// Handle ETH balance
+	if denom == "eth" || denom == "ETH" {
+		balance, err := client.BalanceAt(ctx, ethAddress, nil)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to query ETH balance for address %s", address)
+		}
+		return balance, nil
+	}
+
+	// Handle ERC20 token balance
+	erc20Address := ethcommon.HexToAddress(denom)
+	erc20, err := erc20.NewContract(erc20Address, client)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to create ERC20 contract instance for %s", denom)
+	}
+
+	balance, err := erc20.BalanceOf(nil, ethAddress)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to query ERC20 balance for token %s and address %s", denom, address)
+	}
+
+	return balance, nil
+}

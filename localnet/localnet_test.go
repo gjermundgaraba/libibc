@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"testing"
 	"time"
 
@@ -17,15 +18,17 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
-	"github.com/gjermundgaraba/libibc/chains/cosmos"
+	"github.com/gjermundgaraba/libibc/chainclients/cosmos"
 	"github.com/gjermundgaraba/libibc/localnet/cosmoschain"
 	"github.com/gjermundgaraba/libibc/localnet/cosmoschain/dockerutils"
+	"github.com/gjermundgaraba/libibc/localnet/ethereumchain"
+	"github.com/gjermundgaraba/libibc/localnet/eurekarelayer"
 )
 
-func TestLocalnet(t *testing.T) {
+func TestCosmosOnlyLocalnet(t *testing.T) {
 	ctx := context.Background()
 
-	logger, err := zap.NewDevelopmentConfig().Build()
+	logger, err := testLogger()
 	require.NoError(t, err)
 
 	cleanupLabel := "cli-localnet"
@@ -48,32 +51,167 @@ func TestLocalnet(t *testing.T) {
 		CoinDecimals:   6,
 		CoinType:       "118",
 	}
-	cosmosChain := cosmoschain.NewCosmosChain(logger, "test-chain-1", cfg, cleanupLabel, 1, 1)
-
-	cleanupFunc, err := cosmosChain.Start(ctx, logger)
+	cosmosChain, cleanupFunc, err := cosmoschain.SpinUpCosmos(ctx, logger, "test-chain-1", cfg, cleanupLabel, 1, 1)
 	require.NoError(t, err)
 	t.Cleanup(cleanupFunc)
 
-	c, err := cosmos.NewCosmos(logger.With(zap.String("scope", "cosmos-client")), cfg.ChainID, cfg.Bech32Prefix, cfg.Denom, 0, cosmosChain.GetHostGRPCAddress())
+	cosmosClient := cosmosChain.ChainClient
+
+	testWallet, err := cosmosClient.GenerateWallet("test-wallet")
 	require.NoError(t, err)
+	testAddress := testWallet.Address()
+	logger.Info("Test wallet address", zap.String("address", testAddress))
 
-	// wallet, err := cosmosChain.BuildWallet(ctx, "test-wallet", "")
-	// require.NoError(t, err)
-
-	faucetPrivKeyHex, err := cosmosChain.PrivateKey(ctx, cosmoschain.FaucetKeyName)
-	require.NoError(t, err)
-
-	err = c.AddWallet(cosmoschain.FaucetKeyName, faucetPrivKeyHex)
-	require.NoError(t, err)
-
-	faucetWallet, err := c.GetWallet(cosmoschain.FaucetKeyName)
+	faucetWallet, err := cosmosClient.GetWallet(cosmoschain.FaucetKeyName)
 	require.NoError(t, err)
 	faucetAddress := faucetWallet.Address()
 
-	balance, err := c.GetBalance(ctx, faucetAddress, cfg.Denom)
+	faucetBalance, err := cosmosClient.GetBalance(ctx, faucetAddress, cfg.Denom)
 	require.NoError(t, err)
-	require.Equal(t, balance.Uint64(), uint64(100_000_000_000_000))
+	require.Equal(t, faucetBalance.Uint64(), uint64(100_000_000_000_000))
 
+	testBalance, err := cosmosClient.GetBalance(ctx, testAddress, cfg.Denom)
+	require.NoError(t, err)
+	require.Equal(t, testBalance.Uint64(), uint64(0))
+
+}
+
+func TestCosmosAndEthereumLocalnet(t *testing.T) {
+	ctx := context.Background()
+
+	logger, err := testLogger()
+	require.NoError(t, err)
+
+	// Start Cosmos chain
+	cleanupLabel := "cli-localnet"
+	cosmosCfg := cosmoschain.ChainConfig{
+		Name:    "ibc-go-simd-1",
+		ChainID: "simd-1",
+		Image: dockerutils.ImageRef{
+			Repository: "ghcr.io/cosmos/ibc-go-wasm-simd",
+			Tag:        "release-v10.1.x",
+			UidGid:     "1025:1025",
+		},
+		Bin:            "simd",
+		Bech32Prefix:   "cosmos",
+		Denom:          "stake",
+		GasPrices:      "0.00stake",
+		GasAdjustment:  1.3,
+		EncodingConfig: cosmos.SDKEncodingConfig(),
+		ModifyGenesis:  defaultModifyGenesis(),
+		TrustingPeriod: "508h",
+		CoinDecimals:   6,
+		CoinType:       "118",
+	}
+	cosmosChain, cleanupFunc, err := cosmoschain.SpinUpCosmos(ctx, logger, "test-chain-1", cosmosCfg, cleanupLabel, 1, 1)
+	require.NoError(t, err)
+	t.Cleanup(cleanupFunc)
+
+	cosmosClient := cosmosChain.ChainClient
+
+	// Start Ethereum chain
+	ethereumCfg := ethereumchain.NetworkParams{
+		Participants: []ethereumchain.Participant{
+			{
+				CLType:         "lodestar",
+				CLImage:        "ethpandaops/lodestar:unstable",
+				ELType:         "geth",
+				ELImage:        "ethpandaops/geth:prague-devnet-6",
+				ELExtraParams:  []string{"--gcmode=archive"},
+				ELLogLevel:     "info",
+				ValidatorCount: 64,
+			},
+		},
+		NetworkParams: ethereumchain.NetworkConfigParams{
+			Preset:           "minimal",
+			ElectraForkEpoch: 1,
+		},
+		WaitForFinalization: true,
+		AdditionalServices:  []string{},
+	}
+	ethereumChain, err := ethereumchain.SpinUpEthereum(ctx, logger, ethereumCfg)
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		ethereumChain.Destroy(ctx)
+	})
+
+	ethereumClient := ethereumChain.ChainClient
+
+	cosmosFaucetWallet, err := cosmosClient.GetWallet(cosmoschain.FaucetKeyName)
+	require.NoError(t, err)
+	ethereumFaucetWallet, err := ethereumClient.GetWallet(ethereumchain.FaucetKeyName)
+	require.NoError(t, err)
+
+	cosmosRelayerWallet, err := cosmosClient.GenerateWallet("relayer")
+	require.NoError(t, err)
+	_, err = cosmosClient.Send(ctx, cosmosFaucetWallet, big.NewInt(100_000_000_000), cosmosCfg.Denom, cosmosRelayerWallet.Address())
+	require.NoError(t, err)
+	cosmosRelayerBalance, err := cosmosClient.GetBalance(ctx, cosmosRelayerWallet.Address(), cosmosCfg.Denom)
+	require.NoError(t, err)
+	require.Equal(t, uint64(100_000_000_000), cosmosRelayerBalance.Uint64())
+
+	ethereumRelayerWallet, err := ethereumClient.GenerateWallet("relayer")
+	require.NoError(t, err)
+	_, err = ethereumClient.Send(ctx, ethereumFaucetWallet, big.NewInt(100_000_000_000), "eth", ethereumRelayerWallet.Address())
+	require.NoError(t, err)
+	ethereumRelayerBalance, err := ethereumClient.GetBalance(ctx, ethereumRelayerWallet.Address(), "eth")
+	require.NoError(t, err)
+	require.Equal(t, uint64(100_000_000_000), ethereumRelayerBalance.Uint64())
+
+	sp1Config := eurekarelayer.SP1ProverConfig{
+		Type:           eurekarelayer.SP1ProverTypeNetwork,
+		PrivateCluster: true,
+	}
+
+	config := eurekarelayer.NewConfig(
+		"debug",
+		3000,
+		eurekarelayer.CreateEthCosmosModules(
+			eurekarelayer.EthCosmosConfigInfo{
+				EthChainID:     ethereumClient.ChainID,
+				CosmosChainID:  cosmosClient.ChainID,
+				TmRPC:          cosmosChain.GetHostRPCAddress(),
+				ICS26Address:   ethereumClient.ICS26Address.Hex(),
+				EthRPC:         ethereumClient.RPC,
+				BeaconAPI:      ethereumChain.BeaconRPC,
+				SP1Config:      sp1Config,
+				SignerAddress:  cosmosRelayerWallet.Address(),
+				MockWasmClient: false,
+			}),
+	)
+
+	tmpDir := t.TempDir()
+	configFilePath := fmt.Sprintf("%s/config.json", tmpDir)
+	err = config.GenerateConfigFile(configFilePath)
+	require.NoError(t, err)
+
+	relayerProcess, err := eurekarelayer.StartRelayer(configFilePath)
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		if relayerProcess != nil {
+			err := relayerProcess.Kill()
+			if err != nil {
+				logger.Error("failed to kill relayer process", zap.Error(err))
+			} else {
+				logger.Debug("relayer process killed")
+			}
+		}
+	})
+
+}
+
+func testLogger() (*zap.Logger, error) {
+	logConfig := zap.Config{
+		Level:            zap.NewAtomicLevelAt(zap.DebugLevel),
+		Development:      true,
+		Encoding:         "console",
+		EncoderConfig:    zap.NewDevelopmentEncoderConfig(),
+		OutputPaths:      []string{"stdout"},
+		ErrorOutputPaths: []string{"stderr"},
+	}
+	return logConfig.Build()
 }
 
 func defaultModifyGenesis() func(cosmoschain.ChainConfig, []byte) ([]byte, error) {
