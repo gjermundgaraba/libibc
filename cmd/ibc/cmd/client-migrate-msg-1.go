@@ -25,13 +25,13 @@ type InstantiateMsg struct {
 	Checksum       []byte `json:"checksum"`
 }
 
-type WasmMigrateMsg struct {
+type WasmMigrateMsg1 struct {
 	InstantiateMsg InstantiateMsg `json:"instantiate_msg"`
 }
 
-func clientMigrateMsgCmd() *cobra.Command {
+func clientMigrateMsgCmd1() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "client-migrate-msg [from-chain-id] [to-chain-id] [client-id] [signer] [key]... [value]...",
+		Use:   "client-migrate-msg-1 [from-chain-id] [to-chain-id] [client-id] [signer] [key]... [value]...",
 		Short: "Create client migrate msg",
 		Args:  cobra.MinimumNArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -125,7 +125,7 @@ func clientMigrateMsgCmd() *cobra.Command {
 				return errors.New("expected Wasm consensus state")
 			}
 
-			wasmMigrateMsg := &WasmMigrateMsg{
+			wasmMigrateMsg := &WasmMigrateMsg1{
 				InstantiateMsg: InstantiateMsg{
 					ClientState:    wasmClientState.Data,
 					ConsensusState: wasmConsensusState.Data,
