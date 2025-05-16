@@ -1,4 +1,4 @@
-package eurekarelayerapi
+package api
 
 import (
 	context "context"

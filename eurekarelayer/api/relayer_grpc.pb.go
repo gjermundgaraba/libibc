@@ -4,7 +4,7 @@
 // - protoc             (unknown)
 // source: relayer/relayer.proto
 
-package eurekarelayerapi
+package api
 
 import (
 	context "context"

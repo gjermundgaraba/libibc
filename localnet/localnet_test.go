@@ -73,7 +73,6 @@ func TestCosmosOnlyLocalnet(t *testing.T) {
 	testBalance, err := cosmosClient.GetBalance(ctx, testAddress, cfg.Denom)
 	require.NoError(t, err)
 	require.Equal(t, testBalance.Uint64(), uint64(0))
-
 }
 
 func TestCosmosAndEthereumLocalnet(t *testing.T) {

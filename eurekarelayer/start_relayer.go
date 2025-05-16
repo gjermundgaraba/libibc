@@ -9,7 +9,7 @@ import (
 	grpc "google.golang.org/grpc"
 	insecure "google.golang.org/grpc/credentials/insecure"
 
-	"github.com/gjermundgaraba/libibc/apis/eurekarelayerapi"
+	"github.com/gjermundgaraba/libibc/eurekarelayer/api"
 )
 
 // DefaultRelayerGRPCAddress returns the default gRPC address for the relayer.
@@ -47,11 +47,11 @@ func StartRelayer(configPath string) (*os.Process, error) {
 }
 
 // GetGRPCClient returns a gRPC client for the relayer.
-func GetGRPCClient(addr string) (eurekarelayerapi.RelayerServiceClient, error) {
+func GetGRPCClient(addr string) (api.RelayerServiceClient, error) {
 	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, err
 	}
 
-	return eurekarelayerapi.NewRelayerServiceClient(conn), nil
+	return api.NewRelayerServiceClient(conn), nil
 }
