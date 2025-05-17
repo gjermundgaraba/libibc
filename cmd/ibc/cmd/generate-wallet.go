@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"math/big"
 
 	"github.com/gjermundgaraba/libibc/cmd/ibc/config"
@@ -22,6 +23,11 @@ func generateWalletCmd() *cobra.Command {
 			ctx := cmd.Context()
 			chainID := args[0]
 			newWalletID := args[1]
+
+			cfg, err := config.LoadConfig(networkConfigPath)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
 
 			logWriter.AddExtraLogger(func(entry string) {
 				cmd.Println(entry)

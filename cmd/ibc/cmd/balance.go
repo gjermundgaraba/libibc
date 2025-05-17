@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/gjermundgaraba/libibc/cmd/ibc/config"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
@@ -23,6 +24,11 @@ or ERC20 contract address for token balances.`,
 			ctx := cmd.Context()
 			chainID := args[0]
 			denom := args[1]
+
+			cfg, err := config.LoadConfig(networkConfigPath)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
 
 			logWriter.AddExtraLogger(func(entry string) {
 				fmt.Println(entry)

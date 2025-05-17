@@ -14,7 +14,6 @@ import (
 
 	"github.com/gjermundgaraba/libibc/apis/eurekarelayerapi"
 	"github.com/gjermundgaraba/libibc/chains/cosmos"
-	"github.com/gjermundgaraba/libibc/chains/network"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
@@ -43,11 +42,6 @@ func clientMigrateMsgCmd1() *cobra.Command {
 				cmd.Println(entry)
 			})
 
-			net, err := cfg.ToNetwork(ctx, logger, extraGwei)
-			if err != nil {
-				return errors.Wrap(err, "failed to build network")
-			}
-
 			srcChainID := args[0]
 			dstChainID := args[1]
 			clientID := args[2]
@@ -63,21 +57,7 @@ func clientMigrateMsgCmd1() *cobra.Command {
 				params[key] = value
 			}
 
-			fromChain, err := net.GetChain(srcChainID)
-			if err != nil {
-				return errors.Wrapf(err, "failed to get chain %s", srcChainID)
-			}
-
-			toChain, err := net.GetChain(dstChainID)
-			if err != nil {
-				return errors.Wrapf(err, "failed to get chain %s", dstChainID)
-			}
-
-			if fromChain.GetChainType() != network.ChainTypeEthereum && toChain.GetChainType() != network.ChainTypeCosmos {
-				return errors.New("only Ethereum to Cosmos client migration is supported")
-			}
-
-			eurekaClient := eurekarelayerapi.NewClient(logger, cfg.EurekaAPIAddr)
+			eurekaClient := eurekarelayerapi.NewClient(logger, "localhost:3000")
 
 			resp, err := eurekaClient.CreateClient(ctx, srcChainID, dstChainID, params)
 			if err != nil {

@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"fmt"
-
 	"github.com/gjermundgaraba/libibc/cmd/ibc/config"
 	"github.com/gjermundgaraba/libibc/cmd/ibc/logging"
 	"github.com/spf13/cobra"
@@ -24,12 +22,6 @@ func NewRootCmd() *cobra.Command {
 		Use:   "ibc",
 		Short: "IBC CLI tool",
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			var err error
-			cfg, err = config.LoadConfig(networkConfigPath)
-			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
-			}
-
 			logger, logWriter = logging.NewIBCLogger(logLevel)
 			return nil
 		},
@@ -50,6 +42,7 @@ func NewRootCmd() *cobra.Command {
 		apiCmd(),
 		clientMigrateMsgCmd1(),
 		clientMigrateMsgCmd2(),
+		createClientCmd(),
 	)
 
 	return rootCmd

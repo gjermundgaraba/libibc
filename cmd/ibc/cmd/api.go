@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	skipapi "github.com/gjermundgaraba/libibc/apis/skip-api"
+	"github.com/gjermundgaraba/libibc/cmd/ibc/config"
 )
 
 func apiCmd() *cobra.Command {
@@ -16,6 +17,12 @@ func apiCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(8),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+
+			cfg, err := config.LoadConfig(networkConfigPath)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
 			logWriter.AddExtraLogger(func(entry string) {
 				fmt.Println(entry)
 			})

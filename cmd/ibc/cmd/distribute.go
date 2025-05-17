@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"fmt"
 	"math/big"
 	"time"
 
+	"github.com/gjermundgaraba/libibc/cmd/ibc/config"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
@@ -23,6 +25,11 @@ func distributeCmd() *cobra.Command {
 			chainID := args[0]
 			senderWalletID := args[1]
 			denom := args[2]
+
+			cfg, err := config.LoadConfig(networkConfigPath)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
 
 			logWriter.AddExtraLogger(func(entry string) {
 				cmd.Println(entry)

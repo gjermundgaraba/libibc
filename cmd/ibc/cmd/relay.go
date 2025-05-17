@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"fmt"
 	"strings"
 
+	"github.com/gjermundgaraba/libibc/cmd/ibc/config"
 	"github.com/gjermundgaraba/libibc/relayer"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -16,6 +18,11 @@ func relayCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(4),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+
+			cfg, err := config.LoadConfig(networkConfigPath)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
 
 			logWriter.AddExtraLogger(func(entry string) {
 				cmd.Println(entry)
