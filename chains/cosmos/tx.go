@@ -4,9 +4,6 @@ import (
 	"context"
 	"time"
 
-	// dbm "github.com/cosmos/cosmos-db"
-	// "github.com/cosmos/cosmos-sdk/client/tx"
-	// simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
 	"github.com/cosmos/cosmos-sdk/client/tx"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	txtypes "github.com/cosmos/cosmos-sdk/types/tx"
@@ -21,8 +18,24 @@ import (
 	"go.uber.org/zap"
 )
 
+var _ network.NewTx = &CosmosNewTx{}
+
+type CosmosNewTx struct {
+	bz []byte
+}
+
+func NewCosmosNewTx(bz []byte) *CosmosNewTx {
+	return &CosmosNewTx{
+		bz: bz,
+	}
+}
+
+func (c *CosmosNewTx) GetTxBytes() []byte {
+	return c.bz
+}
+
 // SubmitTx implements network.Chain.
-func (c *Cosmos) SubmitRelayTx(ctx context.Context, txBz []byte, wallet network.Wallet) (string, error) {
+func (c *Cosmos) SubmitTx(ctx context.Context, newTx *CosmosNewTx, wallet network.Wallet, gas uint64) (string, error) {
 	cosmosWallet, ok := wallet.(*Wallet)
 	if !ok {
 		return "", errors.Errorf("invalid wallet type: %T", wallet)
@@ -30,9 +43,16 @@ func (c *Cosmos) SubmitRelayTx(ctx context.Context, txBz []byte, wallet network.
 
 	// Extract messages from the response (cosmos specific)
 	var txBody txtypes.TxBody
-	if err := proto.Unmarshal(txBz, &txBody); err != nil {
+	if err := proto.Unmarshal(newTx.GetTxBytes(), &txBody); err != nil {
 		return "", err
 	}
+
+	txJson, err := c.codec.MarshalJSON(&txBody)
+	if err != nil {
+		// this is only used for debugging, so we just log it
+		c.logger.Error("failed to marshal tx body to json", zap.Error(err))
+	}
+	c.logger.Debug("tx body", zap.String("tx_body", string(txJson)))
 
 	if len(txBody.Messages) == 0 {
 		return "", errors.New("no messages in tx")
@@ -48,7 +68,7 @@ func (c *Cosmos) SubmitRelayTx(ctx context.Context, txBz []byte, wallet network.
 		msgs = append(msgs, sdkMsg)
 	}
 
-	grpcRes, err := c.submitTx(ctx, cosmosWallet, 5_000_000, msgs...)
+	grpcRes, err := c.submitTx(ctx, cosmosWallet, gas, msgs...)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to submit tx")
 	}
@@ -69,11 +89,15 @@ func (c *Cosmos) submitTx(ctx context.Context, wallet *Wallet, gas uint64, msgs 
 		return nil, errors.Wrap(err, "failed to get account info")
 	}
 
+	exp := time.Date(2025, time.April, 15, 15, 0, 0, 0, time.UTC)
+	_ = exp
+
 	txCfg := authtx.NewTxConfig(c.codec, authtx.DefaultSignModes)
 	txBuilder := txCfg.NewTxBuilder()
 	txBuilder.SetGasLimit(gas)
 	txBuilder.SetMsgs(msgs...)
-	txBuilder.SetFeeAmount(sdk.NewCoins(sdk.NewInt64Coin("uatom", int64(gas))))
+	gasPrice := int64(float64(gas) * c.GasPrices)
+	txBuilder.SetFeeAmount(sdk.NewCoins(sdk.NewInt64Coin(c.GasDenom, gasPrice)))
 
 	sigV2 := signing.SignatureV2{
 		PubKey: wallet.privateKey.PubKey(),

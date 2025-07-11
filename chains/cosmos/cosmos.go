@@ -16,21 +16,27 @@ import (
 var _ network.Chain = &Cosmos{}
 
 type Cosmos struct {
-	ChainID string
-	Clients map[string]network.ClientCounterparty
-	Wallets map[string]Wallet
+	ChainID      string
+	Clients      map[string]network.CounterpartyInfo
+	Wallets      map[string]Wallet
+	Bech32Prefix string
+	GasDenom     string
+	GasPrices    float64
 
 	grpcAddr string
 	codec    codec.Codec
 	logger   *zap.Logger
 }
 
-func NewCosmos(logger *zap.Logger, chainID string, grpc string) (*Cosmos, error) {
+func NewCosmos(logger *zap.Logger, chainID string, bech32Prefix string, gasDenom string, gasPrices float64, grpc string) (*Cosmos, error) {
 	codec := SetupCodec()
 	return &Cosmos{
-		ChainID: chainID,
-		Clients: make(map[string]network.ClientCounterparty),
-		Wallets: make(map[string]Wallet),
+		ChainID:      chainID,
+		Clients:      make(map[string]network.CounterpartyInfo),
+		Wallets:      make(map[string]Wallet),
+		Bech32Prefix: bech32Prefix,
+		GasDenom:     gasDenom,
+		GasPrices:    gasPrices,
 
 		grpcAddr: grpc,
 		codec:    codec,
@@ -43,12 +49,28 @@ func (c *Cosmos) GetChainID() string {
 	return c.ChainID
 }
 
-func (c *Cosmos) AddClient(clientID string, counterparty network.ClientCounterparty) {
+// GetChainType implements network.Chain.
+func (c *Cosmos) GetChainType() network.ChainType {
+	return network.ChainTypeCosmos
+}
+
+// AddClient implements network.Chain.
+func (c *Cosmos) AddClient(clientID string, counterparty network.CounterpartyInfo) {
 	c.Clients[clientID] = counterparty
 }
 
+// GetCounterpartyClient implements network.Chain.
+func (c *Cosmos) GetCounterpartyInfo(clientID string) (network.CounterpartyInfo, error) {
+	counterparty, ok := c.Clients[clientID]
+	if !ok {
+		return network.CounterpartyInfo{}, errors.Errorf("client %s not found", clientID)
+	}
+
+	return counterparty, nil
+}
+
 // GetClients implements network.Chain.
-func (c *Cosmos) GetClients() map[string]network.ClientCounterparty {
+func (c *Cosmos) GetClients() map[string]network.CounterpartyInfo {
 	return c.Clients
 }
 

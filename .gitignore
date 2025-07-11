@@ -1,6 +1,7 @@
 CLAUDE.md
 config.toml
 config.*.toml
+load-config.*.toml
 ibc.log
 logs/
 .aider*

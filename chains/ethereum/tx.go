@@ -17,8 +17,26 @@ import (
 	"go.uber.org/zap"
 )
 
+var _ network.NewTx = &EthNewTx{}
+
+type EthNewTx struct {
+	bz       []byte
+	contract ethcommon.Address
+}
+
+func NewEthNewTx(bz []byte, contract ethcommon.Address) *EthNewTx {
+	return &EthNewTx{
+		bz:       bz,
+		contract: contract,
+	}
+}
+
+func (c *EthNewTx) GetTxBytes() []byte {
+	return c.bz
+}
+
 // SubmitTx implements network.Chain.
-func (e *Ethereum) SubmitRelayTx(ctx context.Context, txBz []byte, wallet network.Wallet) (string, error) {
+func (e *Ethereum) SubmitTx(ctx context.Context, ethTx *EthNewTx, wallet network.Wallet, gas uint64) (string, error) {
 	ethereumWallet, ok := wallet.(*Wallet)
 	if !ok {
 		return "", errors.Errorf("invalid wallet type: %T", wallet)
@@ -27,11 +45,11 @@ func (e *Ethereum) SubmitRelayTx(ctx context.Context, txBz []byte, wallet networ
 	receipt, err := e.Transact(ctx, ethereumWallet, func(ethClient *ethclient.Client, txOpts *bind.TransactOpts) (*ethtypes.Transaction, error) {
 		unsignedTx := ethtypes.NewTransaction(
 			txOpts.Nonce.Uint64(),
-			e.ics26Address,
+			ethTx.contract,
 			new(big.Int).SetUint64(0),
-			15_000_000,
+			gas,
 			txOpts.GasPrice,
-			txBz,
+			ethTx.bz,
 		)
 
 		signedTx, err := txOpts.Signer(txOpts.From, unsignedTx)
@@ -50,7 +68,7 @@ func (e *Ethereum) SubmitRelayTx(ctx context.Context, txBz []byte, wallet networ
 		return "", errors.Wrap(err, "failed to submit tx")
 	}
 
-	e.logger.Info("Submitted relay tx", zap.String("tx_hash", receipt.TxHash.String()))
+	e.logger.Info("Submitted  tx", zap.String("tx_hash", receipt.TxHash.String()))
 
 	return receipt.TxHash.String(), nil
 }
@@ -68,8 +86,10 @@ func (e *Ethereum) Transact(ctx context.Context, wallet *Wallet, doTx func(*ethc
 
 	tx, err := doTx(ethClient, txOpts)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to do transaction with txOpts: %+v, using extraGwei: %d (tx, if any): %+v", txOpts, e.extraGwei, tx)
+		return nil, errors.Wrapf(err, "failed to do transaction with txOpts: %+v, using extraGwei: %d (tx, if any): tx %+v", txOpts, e.extraGwei, tx)
 	}
+
+	e.logger.Debug("Transaction sent, waiting for receipt", zap.String("tx_hash", tx.Hash().String()), zap.String("from", txOpts.From.String()), zap.Any("txOpts", txOpts))
 
 	receipt, err := WaitForReceipt(ctx, ethClient, tx.Hash())
 	if err != nil {

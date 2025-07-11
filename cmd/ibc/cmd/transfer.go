@@ -6,7 +6,9 @@ import (
 	"os"
 
 	"github.com/gjermundgaraba/libibc/chains/network"
+	"github.com/gjermundgaraba/libibc/cmd/ibc/config"
 	"github.com/gjermundgaraba/libibc/cmd/ibc/tui"
+	"github.com/gjermundgaraba/libibc/relayer"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
@@ -25,6 +27,11 @@ func transferCmd() *cobra.Command {
 		Short: "Transfer tokens between two chains",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+
+			cfg, err := config.LoadConfig(networkConfigPath)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
 
 			tuiInstance := tui.NewTui(logWriter, "Starting script", "Initializing")
 
@@ -70,7 +77,7 @@ func transferCmd() *cobra.Command {
 				}
 			}
 
-			relayer := networkConfig.NewRelayerQueue(logger, fromChain, toChain, relayerWallet, 1, selfRelay)
+			relayer := relayer.NewRelayerQueue(logger, fromChain, toChain, relayerWallet, 1, selfRelay, cfg.EurekaAPIAddr)
 
 			go func() {
 				errGroup := errgroup.Group{}

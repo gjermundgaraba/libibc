@@ -1,6 +1,7 @@
 package cosmos
 
 import (
+	wasmtypes "github.com/CosmWasm/wasmd/x/wasm/types"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/std"
@@ -27,6 +28,9 @@ func SetupCodec() codec.Codec {
 	transfertypes.RegisterInterfaces(interfaceRegistry)
 	tmclient.RegisterInterfaces(interfaceRegistry)
 	ibcwasmtypes.RegisterInterfaces(interfaceRegistry)
+
+	wasmtypes.RegisterInterfaces(interfaceRegistry)
+
 	cdc := codec.NewProtoCodec(interfaceRegistry)
 
 	return cdc
